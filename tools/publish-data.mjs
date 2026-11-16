@@ -19,7 +19,7 @@ const RAW = path.join(ROOT, 'data', 'raw');
 const WEB = path.join(ROOT, 'docs', 'data');
 const BARS = path.join(WEB, 'bars');
 const round = (x, d = 4) => (Number.isFinite(x) ? +x.toFixed(d) : null);
-const safe = (s) => s.replace(/[^\w.-]/g, '_');
+const safe = (s) => s.replace(/^\^/, '').replace(/[^\w.-]/g, '_');  // '^VIX' -> 'VIX.json' (Jekyll skips leading underscores)
 
 async function main() {
   const model = JSON.parse(await fs.readFile(path.join(WEB, 'model.json'), 'utf8'));
