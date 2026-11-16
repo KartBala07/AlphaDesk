@@ -92,3 +92,4 @@ export const traderSetConfig = (config, api) => call('/api/trader/config', { api
 export const traderRun = (api) => call('/api/trader/run', { api, method: 'POST', body: {} });
 export const traderClose = (id, api) => call(`/api/trader/close/${id}`, { api, method: 'POST', body: {} });
 export const traderReset = (api) => call('/api/trader/reset', { api, method: 'POST', body: {} });
+export const traderOrder = (order, api) => call('/api/trader/order', { api, method: 'POST', body: order });

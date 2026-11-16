@@ -435,6 +435,7 @@ async function copyText(text) {
 
 async function viewTerminal(symbol) {
   const viewEl = $('#view');
+  if (symbol) tvdFollow(symbol);
   if (!symbol) {
     const top = [...S.signals].sort((a, x) => x.edgeR - a.edgeR).slice(0, 8);
     viewEl.innerHTML = `
@@ -1787,6 +1788,320 @@ node server/server.mjs</pre>
   }));
 }
 
+
+/* ----------------------------- tradingview window -------------------------- */
+/* TradingView's app sends `frame-ancestors 'none'` and its embeddable widget
+   loads its chrome inside a frame but not the price plot in browsers that block
+   third-party storage (Brave, Safari ITP). So the reliable path — and the one
+   the user asked for — is a real side window: a compact browser window with
+   their full TradingView terminal, broker connection included.
+   Orders placed here go to our own paper book; TradingView exposes no API for a
+   third-party app to route orders through their terminal. */
+
+const TVD = {
+  el: null, open: false, min: false, book: null,
+  x: null, y: null, w: 460, h: 380,
+  symbol: null, drag: null, resize: null,
+};
+
+const tvdPrefs = () => { try { return JSON.parse(localStorage.getItem('alphadesk.tvdock') || '{}'); } catch { return {}; } };
+const tvdSave = () => {
+  try {
+    localStorage.setItem('alphadesk.tvdock', JSON.stringify({ x: TVD.x, y: TVD.y, w: TVD.w, h: TVD.h, open: TVD.open, min: TVD.min }));
+  } catch {}
+};
+
+/** Our tickers are bare; TradingView wants a venue for crypto and indices. */
+function tvSymbolFor(sym) {
+  const s = String(sym || '').toUpperCase();
+  if (!s) return 'NASDAQ:AAPL';
+  if (s.endsWith('-USD')) return `COINBASE:${s.replace('-USD', 'USD')}`;
+  if (s === 'VIX') return 'CBOE:VIX';
+  if (s === 'IXIC') return 'NASDAQ:IXIC';
+  return s;
+}
+
+const tvChartURL = (sym) => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbolFor(sym))}`;
+
+/** A compact, non-modal side window with the real terminal. */
+function tvdOpenWindow(sym) {
+  const w = 620, h = 580;
+  const dual = window.screen.availWidth - window.outerWidth;
+  const left = Math.max(0, dual > w ? window.screenX + window.outerWidth + 12 : window.screenX + 80);
+  const top = Math.max(0, window.screenY + 60);
+  const feat = `popup=yes,width=${w},height=${h},left=${Math.round(left)},top=${Math.round(top)},resizable=yes,scrollbars=yes`;
+  const win = window.open(tvChartURL(sym), `tv_${sym}`, feat);
+  if (!win) {
+    toast('Popup blocked — opening in a new tab instead', 'err');
+    window.open(tvChartURL(sym), '_blank', 'noopener');
+    return false;
+  }
+  win.focus?.();
+  return true;
+}
+
+function tvdBuild() {
+  if (TVD.el) return TVD.el;
+  const el = document.createElement('div');
+  el.className = 'tvd';
+  el.id = 'tvd';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Trade window');
+  el.hidden = true;
+  el.innerHTML = `
+    <div class="tvd-head" id="tvdHead">
+      <i class="tvd-dot" aria-hidden="true"></i>
+      <b class="tvd-sym" id="tvdSym">—</b>
+      <span class="tvd-sub">trade window</span>
+      <span class="spacer"></span>
+      <button class="icon-btn" data-tvd="min" aria-label="Minimise window" title="Minimise">–</button>
+      <button class="icon-btn" data-tvd="close" aria-label="Close window" title="Close">✕</button>
+    </div>
+    <div class="tvd-body">
+      <div class="tvd-read" id="tvdRead"></div>
+      <button class="btn primary block" id="tvdPop">Open TradingView window ↗</button>
+      <div class="tvd-acts">
+        <button class="btn block" id="tvdTrade" disabled>Paper trade</button>
+        <button class="btn ghost block" id="tvdTicket" disabled>Copy ticket</button>
+      </div>
+      <p class="hint" id="tvdNote">TradingView's chart refuses to be embedded, so the window opens beside this one with your own broker connected. Fills below land in your paper book.</p>
+    </div>
+    <div class="tvd-grip" data-tvd="grip" aria-hidden="true"></div>`;
+  document.body.appendChild(el);
+  TVD.el = el;
+
+  el.querySelector('[data-tvd="close"]').addEventListener('click', () => tvdClose());
+  el.querySelector('[data-tvd="min"]').addEventListener('click', () => tvdMinimise());
+  el.querySelector('#tvdPop').addEventListener('click', () => tvdOpenWindow(TVD.symbol || 'AAPL'));
+  el.querySelector('#tvdTrade').addEventListener('click', tvdTrade);
+  el.querySelector('#tvdTicket').addEventListener('click', tvdCopyTicket);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); tvdClose(); } });
+  tvdWireDrag();
+  return el;
+}
+
+function tvdClamp() {
+  const el = TVD.el;
+  if (!el) return;
+  const maxW = Math.max(360, window.innerWidth - 24);
+  const maxH = Math.max(300, window.innerHeight - 100);
+  TVD.w = Math.min(Math.max(400, TVD.w), maxW);
+  TVD.h = Math.min(Math.max(320, TVD.h), maxH);
+  TVD.x = Math.min(Math.max(8, TVD.x ?? window.innerWidth - TVD.w - 24), window.innerWidth - TVD.w - 8);
+  TVD.y = Math.min(Math.max(8, TVD.y ?? window.innerHeight - TVD.h - 64), window.innerHeight - TVD.h - 8);
+  el.style.width = `${TVD.w}px`;
+  el.style.height = `${TVD.min ? 42 : TVD.h}px`;
+  el.style.left = `${TVD.x}px`;
+  el.style.top = `${TVD.y}px`;
+}
+
+function tvdWireDrag() {
+  const head = TVD.el.querySelector('#tvdHead');
+  const grip = TVD.el.querySelector('.tvd-grip');
+
+  head.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    head.setPointerCapture(e.pointerId);
+    TVD.drag = { dx: e.clientX - (TVD.x || 0), dy: e.clientY - (TVD.y || 0) };
+    head.style.cursor = 'grabbing';
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!TVD.drag) return;
+    TVD.x = e.clientX - TVD.drag.dx;
+    TVD.y = e.clientY - TVD.drag.dy;
+    tvdClamp();
+  });
+  const endDrag = () => { if (TVD.drag) { TVD.drag = null; head.style.cursor = ''; tvdSave(); } };
+  head.addEventListener('pointerup', endDrag);
+  head.addEventListener('pointercancel', endDrag);
+
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    TVD.resize = { sx: e.clientX, sy: e.clientY, w: TVD.w, h: TVD.h };
+  });
+  grip.addEventListener('pointermove', (e) => {
+    if (!TVD.resize) return;
+    TVD.w = TVD.resize.w + (e.clientX - TVD.resize.sx);
+    TVD.h = TVD.resize.h + (e.clientY - TVD.resize.sy);
+    tvdClamp();
+  });
+  const endResize = () => { if (TVD.resize) { TVD.resize = null; tvdSave(); } };
+  grip.addEventListener('pointerup', endResize);
+  grip.addEventListener('pointercancel', endResize);
+}
+
+/** Signals carry price/stop/target; the ticket (size, risk, R:R) is derived
+ *  from the same settings the analyse view uses. */
+function tvTicket(sig) {
+  if (!sig || sig.side === 'flat' || !Number.isFinite(sig.stop) || !Number.isFinite(sig.target)) return null;
+  const entry = sig.price;
+  const perShare = Math.abs(entry - sig.stop);
+  if (!(perShare > 0)) return null;
+  const equity = TVD.book?.equity ?? (Number(S.settings.account) || 100000);
+  const riskPct = TVD.book?.riskPct ?? (Number(S.settings.riskPct) || 1);
+  const maxNotionalPct = TVD.book?.maxNotionalPct ?? 25;
+  const riskCash = equity * (riskPct / 100);
+  let shares = Math.max(0, Math.floor(riskCash / perShare));
+  const cap = equity * (maxNotionalPct / 100);
+  if (shares * entry > cap) shares = Math.floor(cap / entry);
+  if (shares < 1) return null;
+  const rr = Math.abs(sig.target - entry) / perShare;
+  return {
+    entry, stop: sig.stop, target: sig.target, shares,
+    riskCash: shares * perShare, rr,
+    stopPct: ((perShare / entry) * 100).toFixed(2),
+    side: sig.side,
+  };
+}
+
+function tvdRender(sym) {
+  const el = tvdBuild();
+  TVD.symbol = sym;
+  el.querySelector('#tvdSym').textContent = sym;
+  const s = S.signalBy.get(sym);
+  const read = el.querySelector('#tvdRead');
+  const tradeBtn = el.querySelector('#tvdTrade');
+  const ticketBtn = el.querySelector('#tvdTicket');
+
+  if (!s) {
+    read.innerHTML = `<p class="hint" style="margin:0">No model read for ${esc(sym)}.</p>`;
+    tradeBtn.disabled = true; ticketBtn.disabled = true;
+    return;
+  }
+
+  const t = tvTicket(s);
+  const flat = !t;
+  read.innerHTML = `
+    <div class="tvd-line">
+      ${sideBadge(s.side, s.conviction)}
+      <b class="mono">${esc(sym)}</b>
+      <span class="mono dim">${fmtPrice(s.price)}</span>
+      <span class="spacer"></span>
+      <span class="mono ${signCls(s.edgeR)}">${rmult(s.edgeR)}</span>
+    </div>
+    ${flat ? `<p class="hint" style="margin:8px 0 0">No trade — the model's edge is below the gate. Nothing to execute here.</p>` : `
+    <dl class="tvd-grid">
+      <div><dt>Entry</dt><dd class="mono">${fmtPrice(t.entry)}</dd></div>
+      <div><dt>Stop</dt><dd class="mono neg">${fmtPrice(t.stop)}</dd></div>
+      <div><dt>Target</dt><dd class="mono pos">${fmtPrice(t.target)}</dd></div>
+      <div><dt>Size</dt><dd class="mono">${t.shares} sh</dd></div>
+      <div><dt>Risk</dt><dd class="mono">${money(t.riskCash)}</dd></div>
+      <div><dt>R:R</dt><dd class="mono">${t.rr.toFixed(2)}</dd></div>
+    </dl>`}`;
+
+  tradeBtn.disabled = flat;
+  ticketBtn.disabled = flat;
+  tradeBtn.title = flat ? 'No trade clears the gate' : `Open ${s.side} on ${sym} in the paper book`;
+}
+
+async function tvdLoadBook() {
+  try {
+    const st = await auth.traderStatus(apiBase());
+    if (st && Number.isFinite(st.equity)) {
+      TVD.book = { equity: st.equity, riskPct: st.settings.riskPct, maxNotionalPct: st.settings.maxNotionalPct };
+      TVD.el?.removeAttribute('data-book-err');
+      return;
+    }
+    TVD.book = null;
+  } catch (e) {
+    TVD.book = null;
+    TVD.el?.setAttribute('data-book-err', String(e.message || e).slice(0, 80));
+  }
+}
+
+async function tvdOpen(sym) {
+  const el = tvdBuild();
+  const p = tvdPrefs();
+  if (TVD.x == null && p.x != null) { TVD.x = p.x; TVD.y = p.y; TVD.w = p.w || TVD.w; TVD.h = p.h || TVD.h; }
+  TVD.open = true;
+  TVD.min = false;
+  el.hidden = false;
+  tvdClamp();
+  /* Fetch the paper book first, so the sizing shown is the sizing submitted. */
+  await tvdLoadBook();
+  tvdRender(sym || TVD.symbol || 'AAPL');
+  el.querySelector('#tvdPop').focus?.();
+  tvdSave();
+}
+
+function tvdClose() {
+  if (!TVD.el) return;
+  TVD.open = false;
+  TVD.el.hidden = true;
+  tvdSave();
+  $('#tvOpenBtn')?.focus();
+}
+
+function tvdMinimise() {
+  TVD.min = !TVD.min;
+  TVD.el?.classList.toggle('min', TVD.min);
+  tvdClamp();
+  tvdSave();
+}
+
+function tvdFollow(sym) {
+  if (!sym) return;
+  TVD.symbol = sym;
+  if (TVD.open && TVD.el) tvdRender(sym);
+}
+
+function tvdCopyTicket() {
+  const s = S.signalBy.get(TVD.symbol);
+  const t = tvTicket(s);
+  if (!t) return;
+  const text = [
+    `${s.symbol} — ${t.side === 'long' ? 'BUY' : 'SELL SHORT'} (limit ${fmtPrice(t.entry)})`,
+    `Qty: ${t.shares}`,
+    `Stop: ${fmtPrice(t.stop)}  (${t.stopPct}%)`,
+    `Target: ${fmtPrice(t.target)}  (${t.rr.toFixed(2)}R)`,
+    `Risk: ${money(t.riskCash)} at stop`,
+    `Signal bar: ${s.date || '—'}. Not investment advice.`,
+  ].join('\n');
+  navigator.clipboard?.writeText(text).then(
+    () => toast('Ticket copied — paste it into TradingView or your broker', 'ok'),
+    () => toast('Could not access the clipboard', 'err'),
+  );
+}
+
+async function tvdTrade() {
+  const sym = TVD.symbol;
+  const sig = S.signalBy.get(sym);
+  if (!sig || sig.side === 'flat') return;
+  if (!S.user) {
+    /* GitHub Pages has no backend: tell the truth instead of opening a login
+       form that cannot succeed. */
+    let apiUp = true;
+    try { const r = await fetch(`${apiBase()}/api/csrf`, { credentials: 'include' }); apiUp = r.ok; } catch { apiUp = false; }
+    if (!apiUp) { toast('Paper trades need the local server: node server/server.mjs', 'err'); return; }
+    toast('Sign in to place a paper trade', 'err');
+    openAuthModal('login');
+    return;
+  }
+  const btn = $('#tvdTrade');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Placing…';
+  try {
+    const r = await auth.traderOrder({ symbol: sym, side: sig.side }, apiBase());
+    toast(`Paper ${r.result.side} ${r.result.qty} ${r.result.symbol} filled`, 'ok');
+    btn.textContent = 'Filled ✓';
+    await tvdLoadBook();
+    if (TVD.open) tvdRender(TVD.symbol);
+    setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 1800);
+  } catch (e) {
+    toast(e.message, 'err');
+    btn.textContent = label;
+    btn.disabled = false;
+  }
+}
+
+function tvdInitOnce() {
+  tvdBuild();
+  const p = tvdPrefs();
+  if (p.open) tvdOpen(TVD.symbol || 'AAPL');
+}
+
 /* ---------------------------------- router --------------------------------- */
 
 const ROUTES = {
@@ -1912,6 +2227,15 @@ async function main() {
     route();
   });
   $('#menuBtn').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+  $('#tvOpenBtn').addEventListener('click', () => (TVD.open ? tvdClose() : tvdOpen(TVD.symbol || 'AAPL')));
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 't' && e.key !== 'T') return;
+    const tag = (document.activeElement?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    e.preventDefault();
+    TVD.open ? tvdClose() : tvdOpen(TVD.symbol || 'AAPL');
+  });
   $$('.nav-item').forEach((n) => n.addEventListener('click', () => { location.hash = `#/${n.dataset.route}`; }));
   window.addEventListener('hashchange', route);
 
@@ -1925,6 +2249,7 @@ async function main() {
   const newestBar = S.universe.map((u) => u.last).filter(Boolean).sort().at(-1);
   $('#dataChip').textContent = `prices ${newestBar || S.model.training.dateRange[1]}`;
   startClock();
+  tvdInitOnce();
   await refreshAuth();
   $('#dataChip').title = `Daily bars through ${newestBar || ''}. The model's newest labelled row is ${S.model.training.dateRange[1]} (labels need 15 forward bars).`;
   setRegimeMini();

@@ -816,3 +816,75 @@ p, .hint, .card-sub, .news-item p { text-wrap: pretty; }
 .chip[data-ind="ema20"] .swatch { background: #a78bfa; }
 .chip[data-ind="ema50"] .swatch { background: #5aa9ff; }
 .chip[data-ind="ema200"] .swatch { background: #ffb84d; }
+
+/* ---------------------------- TradingView window --------------------------- */
+/* A floating, non-modal window. TradingView's own app refuses to be framed
+   (frame-ancestors 'none'), so this embeds their official chart widget — the
+   supported surface — and the trade strip below talks to our own paper book. */
+
+.tv-open-btn svg { width: 17px; height: 17px; }
+
+.tvd {
+  position: fixed; z-index: 90; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line-2);
+  border-radius: 14px; box-shadow: var(--shadow);
+  overflow: hidden; min-width: 340px;
+}
+.tvd[hidden] { display: none; }
+.tvd-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px 7px 11px; border-bottom: 1px solid var(--line);
+  background: var(--panel-2); cursor: grab; user-select: none;
+  touch-action: none;
+}
+.tvd-head:active { cursor: grabbing; }
+.tvd-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.tvd-sym { font-family: var(--mono); font-size: var(--fs-sm); letter-spacing: .01em; }
+.tvd-sub { font-size: var(--fs-2xs); color: var(--dim); }
+.tvd-head .icon-btn { width: 26px; height: 26px; }
+.tvd-body { flex: 1; min-height: 0; background: var(--panel-2); }
+.tvd-body iframe { width: 100%; height: 100%; border: 0; display: block; }
+.tvd-foot {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  border-top: 1px solid var(--line); background: var(--panel-2);
+}
+.tvd-sig {
+  flex: 1; min-width: 0; font-size: var(--fs-2xs); color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tvd.min { height: 44px !important; }
+.tvd.min .tvd-body, .tvd.min .tvd-foot, .tvd.min .tvd-grip { display: none; }
+.tvd-grip {
+  position: absolute; right: 0; bottom: 0; width: 18px; height: 18px;
+  cursor: nwse-resize; touch-action: none;
+}
+.tvd-grip::after {
+  content: ''; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px;
+  border-right: 2px solid var(--line-2); border-bottom: 2px solid var(--line-2);
+  border-bottom-right-radius: 2px;
+}
+
+@media (max-width: 720px) {
+  .tvd {
+    left: 8px !important; right: 8px; bottom: 8px; top: auto !important;
+    width: auto !important; height: 56vh !important; min-width: 0;
+  }
+  .tvd-head { cursor: default; }
+  .tvd-grip { display: none; }
+}
+
+/* Trade window body: the read, the sizing, and the two actions. */
+.tvd-body { display: flex; flex-direction: column; gap: 9px; padding: 11px; overflow: auto; }
+.tvd-line { display: flex; align-items: center; gap: 7px; font-size: var(--fs-sm); }
+.tvd-line .spacer { flex: 1; }
+.tvd-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px;
+  margin: 0; padding: 9px; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+}
+.tvd-grid div { min-width: 0; }
+.tvd-grid dt { font-size: var(--fs-2xs); color: var(--dim); margin-bottom: 2px; }
+.tvd-grid dd { margin: 0; font-size: var(--fs-sm); color: var(--text); }
+.tvd-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn.block { width: 100%; }
+#tvdNote { margin: 0; font-size: var(--fs-2xs); }

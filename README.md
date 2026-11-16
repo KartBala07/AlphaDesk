@@ -303,3 +303,38 @@ Two systemic fixes came out of the colour review. Green was doing double duty as
 accent hue now owns selection and green is reserved for direction. And the light
 theme had been derived by inverting the dark one, so its status colours were
 tuned for a black background; they are now solved against white and measured.
+
+---
+
+## TradingView trade window
+
+Press **T** or the monitor icon in the top bar. A draggable, resizable window
+opens over the app with the current symbol's read, its sizing, and two actions.
+
+**What it does not do:** embed TradingView's chart. Their app sends
+`Content-Security-Policy: frame-ancestors 'none'`, and their embeddable widget
+loads its chrome in a frame but never draws the plot in browsers that block
+third-party storage (Brave, Safari ITT) — verified both ways, including a bare
+`<iframe>` on a page with no CSP at all. Shipping a permanently blank panel would
+have looked like a feature and behaved like a bug.
+
+**What it does:** *Open TradingView window* launches a compact 620×580 side
+window with your real TradingView terminal for that symbol, signed in with your
+broker. The window and the app sit side by side. *Paper trade* fills in this
+app's book at the size shown; *Copy ticket* puts the exact limit, stop, target
+and quantity on your clipboard for pasting into TradingView.
+
+The sizing you see is the sizing submitted: the window loads the paper book's
+equity, risk percentage and notional cap before it renders, so the preview and
+the fill agree (verified: 109 shares shown, 109 shares filled).
+
+| Surface | Can place an order? |
+|---|---|
+| This app (paper book) | Yes — `Paper trade` |
+| This app → Alpaca paper | Yes, with your own keys (adapter in `server/trader.mjs`) |
+| TradingView window | Only inside TradingView, through the broker you connected there |
+| Any app → TradingView order API | **No such public API exists** |
+
+`www.tradingview.com/chart` cannot be framed; only their widget can, and the
+widget carries no order routing. A third-party app placing orders *through*
+TradingView is not a supported integration at any price.

@@ -373,6 +373,46 @@ export function setConfig(db, userId, patch) {
   return getStatus(db, userId);
 }
 
+/**
+ * Manual order from the chart window: the user picks a symbol, the engine sizes
+ * it from the model's stop, and the paper book takes it. Deliberately restricted
+ * to the side the model actually favours — a manual ticket is a shortcut to the
+ * same trade, not an override of the risk model.
+ */
+export function placeManualOrder(db, userId, { symbol, side } = {}) {
+  ensureTables(db);
+  const acct = rollDay(db, ensureAccount(db, userId));
+  if (!symbol) throw new Error('A symbol is required.');
+  const sig = loadSignals().signals.find((s) => String(s.symbol).toUpperCase() === String(symbol).toUpperCase());
+  if (!sig) throw new Error(`${symbol} is not in the current signal snapshot.`);
+  if (sig.side === 'flat' || !Number.isFinite(sig.stop) || !Number.isFinite(sig.target)) {
+    throw new Error(`The model has no trade for ${sig.symbol} right now (edge ${sig.edgeR ?? 0}R).`);
+  }
+  const want = side || sig.side;
+  if (want !== sig.side) throw new Error(`The model favours ${sig.side} on ${sig.symbol}, not ${want}.`);
+
+  const dupe = db.prepare("SELECT id FROM trader_positions WHERE user_id = ? AND symbol = ? AND status = 'open'").get(userId, sig.symbol);
+  if (dupe) throw new Error(`Already holding ${sig.symbol} in the paper book.`);
+
+  const equity = currentEquity(db, userId);
+  const size = sizePosition(acct, equity, sig.price, sig.stop);
+  if (!size) throw new Error('Position too small for the account at this stop distance.');
+
+  const id = uuid();
+  const t = Math.floor(Date.now() / 1000);
+  const sd = sig.date || snapshotDate();
+  db.prepare(`INSERT INTO trader_positions
+    (id, user_id, symbol, side, qty, entry, stop, target, risk_cash, edge_r, source, signal_date, opened_at, status, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(id, userId, sig.symbol, want, size.qty, sig.price, sig.stop, sig.target, round(size.riskCash, 2),
+      sig.edgeR ?? null, 'manual', sd, sd, 'open', t);
+  db.prepare(`INSERT INTO trader_orders (id, user_id, position_id, symbol, side, qty, type, limit_price, stop_price, target_price, status, note, created_at)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .run(uuid(), userId, id, sig.symbol, want === 'long' ? 'buy' : 'sell', size.qty, 'bracket',
+      sig.price, sig.stop, sig.target, 'filled', `manual from chart panel on ${sd}`, t);
+  return { positionId: id, symbol: sig.symbol, side: want, qty: size.qty, ...getStatus(db, userId) };
+}
+
 export function closePosition(db, userId, id) {
   const p = db.prepare('SELECT * FROM trader_positions WHERE id = ? AND user_id = ? AND status = ?').get(id, userId, 'open');
   if (!p) return null;

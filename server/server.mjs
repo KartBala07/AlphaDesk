@@ -31,7 +31,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
-import { ensureTables as ensureTraderTables, getStatus as traderStatus, setEnabled as traderEnable, setConfig as traderConfig, runCycle as traderRun, closePosition as traderClose, resetAccount as traderReset } from './trader.mjs';
+import { ensureTables as ensureTraderTables, getStatus as traderStatus, setEnabled as traderEnable, setConfig as traderConfig, runCycle as traderRun, closePosition as traderClose, placeManualOrder as traderOrder, resetAccount as traderReset } from './trader.mjs';
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -285,6 +285,9 @@ const SITE_CSP = [
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https://api.gdeltproject.org https://api.coingecko.com https://api.twelvedata.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com http://127.0.0.1:8788 http://localhost:8788",
   "font-src 'self' data:",
+  /* The chart window embeds TradingView's official widget. Their full app sets
+     frame-ancestors 'none', the widget is the embeddable surface. */
+  "frame-src 'self' https://s.tradingview.com https://*.tradingview.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -491,6 +494,21 @@ const server = http.createServer(async (req, res) => {
       const result = traderRun(db, user.id);
       audit('trader_run', user.id, ip, JSON.stringify(result).slice(0, 200));
       return send(res, 200, { ok: true, result, ...traderStatus(db, user.id) }, origin);
+    }
+
+    if (route === '/api/trader/order' && method === 'POST') {
+      if (!csrfGuard(req, res, origin, cookies)) return;
+      const user = requireUser(req, res, origin);
+      if (!user) return;
+      if (!rateLimit(`traderorder:${user.id}`, 60, 3600)) return send(res, 429, { ok: false, error: 'Too many orders.' }, origin);
+      const body = await readBody(req);
+      try {
+        const result = traderOrder(db, user.id, { symbol: body.symbol, side: body.side });
+        audit('trader_manual_order', user.id, ip, `${body.symbol}:${result.side}x${result.qty}`);
+        return send(res, 200, { ok: true, result }, origin);
+      } catch (e) {
+        return send(res, 400, { ok: false, error: e.message }, origin);
+      }
     }
 
     if (route === '/api/trader/reset' && method === 'POST') {
