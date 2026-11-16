@@ -419,6 +419,12 @@
  ],
  "evidence": [
   {
+   "topic": "Simple technical rules vs buy-and-hold",
+   "finding": "Own replication on S&P 500 daily data, 2016-2026: buy-and-hold returned 13.3% a year, a 200-day moving-average rule 7.7%, and a MACD rule 6.5%, although maximum drawdowns improved from -33.9% to -19.7%. The rules cut pain; they did not add return. This is why AlphaDesk reports its own portfolio against buy-and-hold instead of only against other strategies.",
+   "strength": "weak",
+   "source": "https://github.com/KartBala07/AlphaDesk/blob/main/research/EVIDENCE.md"
+  },
+  {
    "topic": "Time-series momentum",
    "finding": "An instrument's own past 12-month return positively predicts its next-month return across 58 futures and forward contracts, for every contract examined, persisting about a year before partially reversing.",
    "strength": "moderate",
