@@ -275,3 +275,31 @@ win about 95 times in 100 — while losing more on the five losses than you made
 the ninety-five wins. Hit rate alone is not a strategy metric; expectancy is.
 That is why the desk reports R multiples, the calibration table and the
 buy-and-hold benchmark instead of a win-rate headline.
+
+---
+
+## Interface quality
+
+The UI was reviewed against [jakubkrehel/skills](https://github.com/jakubkrehel/skills)
+— accessibility, colour, typography, layout and polish — and the findings were
+fixed rather than noted. `node tools/ui-audit.mjs` re-runs the measurable half:
+
+| Check | Before | After |
+|---|---|---|
+| Dark `--dim` on panel-2 | 3.74:1 (fail AA) | 4.55:1 |
+| Light `--dim` on page | 3.40:1 (fail) | 4.57:1 |
+| Light green on page | **2.82:1** (fail) | 4.58:1 |
+| Light red on page | 4.16:1 (fail) | 4.53:1 |
+| Light amber on page | 3.79:1 (fail) | 4.54:1 |
+| Distinct font sizes | 24, six under 12px | 9 tokenised steps, 11px floor |
+| Visible focus ring | none on buttons or links | 2px `:focus-visible`, 9.9:1 |
+| Modal focus | never moved, no restore | trapped, `inert` background, restored |
+| Skip link | absent | first tab stop, visible on focus |
+| Toast announcements | silent | `role="status"`, `role="alert"` for errors |
+| 320px width | not checked | no horizontal overflow |
+
+Two systemic fixes came out of the colour review. Green was doing double duty as
+"price up" and "selected", which makes every selected row read as a gain — the
+accent hue now owns selection and green is reserved for direction. And the light
+theme had been derived by inverting the dark one, so its status colours were
+tuned for a black background; they are now solved against white and measured.

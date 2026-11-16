@@ -31,6 +31,8 @@ const dateOf = (s) => (s ? new Date(`${s}T00:00:00Z`).toLocaleDateString('en-US'
 
 function toast(msg, kind = '') {
   const wrap = $('#toastWrap');
+  if (kind === 'err') wrap.setAttribute('role', 'alert');
+  else wrap.setAttribute('role', 'status');
   const el = document.createElement('div');
   el.className = `toast ${kind}`;
   el.textContent = msg;
@@ -368,16 +370,40 @@ const journalAll = () => { try { return JSON.parse(localStorage.getItem('alphade
 const journalSave = (list) => localStorage.setItem('alphadesk.journal', JSON.stringify(list));
 
 function openModal(title, bodyHTML, onMount) {
+  const appEl = document.getElementById('app');
+  const prevFocus = document.activeElement;
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
-  wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+  wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
     <div class="modal-head"><b>${esc(title)}</b><button class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div class="modal-body">${bodyHTML}</div>
   </div>`;
   document.body.appendChild(wrap);
-  const close = () => wrap.remove();
+  appEl?.setAttribute('inert', '');
+
+  const focusables = () => [...wrap.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter((el) => el.offsetParent !== null || el === document.activeElement);
+
+  const close = () => {
+    wrap.remove();
+    appEl?.removeAttribute('inert');
+    document.removeEventListener('keydown', onKey);
+    prevFocus?.focus?.();
+  };
+
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    if (e.key !== 'Tab') return;
+    const f = focusables();
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+
+  document.addEventListener('keydown', onKey);
   wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
-  document.addEventListener('keydown', function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } });
+  requestAnimationFrame(() => focusables()[0]?.focus());
   onMount?.(wrap, close);
   return { close };
 }
@@ -479,10 +505,10 @@ async function viewTerminal(symbol) {
               ['rect', '<rect x="4" y="6" width="16" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/>'],
               ['fib', '<path d="M4 7h16M4 11h16M4 15h16M4 19h16" stroke="currentColor" stroke-width="1.3"/>'],
               ['measure', '<path d="M4 17L17 4M14 4h3v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'],
-            ].map(([tool, svg]) => `<button class="tv-tool ${prefs.tool === tool ? 'on' : ''}" data-tool="${tool}" title="${tool}"><svg viewBox="0 0 24 24">${svg}</svg></button>`).join('')}
+            ].map(([tool, svg]) => `<button class="tv-tool ${prefs.tool === tool ? 'on' : ''}" data-tool="${tool}" title="${tool}" aria-label="${tool} tool" aria-pressed="${prefs.tool === tool}"><svg viewBox="0 0 24 24">${svg}</svg></button>`).join('')}
             <div class="tv-tool-sep"></div>
-            <button class="tv-tool" id="tvUndo" title="Undo drawing"><svg viewBox="0 0 24 24"><path d="M8 7H15a5 5 0 010 10H9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M11 4L7 7l4 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            <button class="tv-tool" id="tvClear" title="Clear drawings"><svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M8 7l1 13h6l1-13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+            <button class="tv-tool" id="tvUndo" title="Undo drawing" aria-label="Undo drawing"><svg viewBox="0 0 24 24"><path d="M8 7H15a5 5 0 010 10H9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M11 4L7 7l4 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button class="tv-tool" id="tvClear" title="Clear drawings" aria-label="Clear drawings"><svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M8 7l1 13h6l1-13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
           </div>
           <div class="tv-chart" id="chartHost"></div>
         </div>
@@ -494,7 +520,8 @@ async function viewTerminal(symbol) {
           <div class="flex wrap" id="tvInd" style="gap:5px">
             ${[['ema20', 'EMA 20'], ['ema50', 'EMA 50'], ['ema200', 'EMA 200'], ['bb', 'Bollinger'], ['volume', 'Volume'], ['rsi', 'RSI'], ['macd', 'MACD']].map(([x, l]) => {
               const on = prefs.overlays.includes(x) || prefs.panes.includes(x);
-              return `<button class="chip ${on ? 'on' : ''}" data-ind="${x}">${l}</button>`;
+              const swatch = x.startsWith('ema') ? '<i class="swatch" aria-hidden="true"></i>' : '';
+              return `<button class="chip ${on ? 'on' : ''}" data-ind="${x}" aria-pressed="${on}">${swatch}${l}</button>`;
             }).join('')}
           </div>
           <span class="spacer"></span>
@@ -583,7 +610,7 @@ async function viewTerminal(symbol) {
     overlays: prefs.overlays, panes: prefs.panes,
     onCrosshair: legend,
     onDrawingsChange: (list) => saveDrawings(symbol, list),
-    onToolChange: (tool) => $$('#tvTools .tv-tool[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool)),
+    onToolChange: (tool) => $$('#tvTools .tv-tool[data-tool]').forEach((b) => { const on = b.dataset.tool === tool; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }),
   });
   window.__chart = chart;   // handy for debugging in the console
   chart.setData({ symbol, bars })
@@ -652,7 +679,7 @@ async function viewTerminal(symbol) {
         <span class="tv-row-sym">${esc(x.symbol)}</span>
         <span class="tv-row-px mono">${fmtPrice(price)}</span>
         <span class="tv-row-chg mono ${signCls(chg)}">${pctRaw(chg)}</span>
-        <i class="tv-dot ${x.side === 'long' ? 'long' : x.side === 'short' ? 'short' : ''}"></i>
+        <i class="tv-dot ${x.side === 'long' ? 'long' : x.side === 'short' ? 'short' : ''}" aria-hidden="true"></i><span class="sr-only">${x.side}</span>
       </button>`;
     }).join('') || `<div class="empty" style="padding:20px">No matches</div>`;
     $$('#tvList .tv-row').forEach((b) => b.addEventListener('click', () => { location.hash = `#/analyze/${b.dataset.sym}`; }));
