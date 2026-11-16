@@ -1211,10 +1211,10 @@ const ROUTES = {
 let currentRoute = '';
 
 async function route() {
-  const hash = location.hash.replace(/^#\/?/, '');
+  const hash = location.hash.replace(/^#\/?/, '').split('?')[0];
   const [name, arg] = hash.split('/');
   const key = ROUTES[name] ? name : 'dashboard';
-  const sym = arg ? decodeURIComponent(arg).toUpperCase() : '';
+  const sym = arg ? decodeURIComponent(arg.split('?')[0]).toUpperCase() : '';
   currentRoute = `${key}/${sym}`;
   $$('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.route === key));
   $('#sidebar').classList.remove('open');
