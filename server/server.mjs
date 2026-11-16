@@ -31,6 +31,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { promisify } from 'node:util';
+import { ensureTables as ensureTraderTables, getStatus as traderStatus, setEnabled as traderEnable, setConfig as traderConfig, runCycle as traderRun, closePosition as traderClose, resetAccount as traderReset } from './trader.mjs';
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -92,6 +93,8 @@ CREATE TABLE IF NOT EXISTS audit (
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_journal_user ON journal(user_id, status);
 `);
+
+ensureTraderTables(db);
 
 /* -------------------------------- helpers -------------------------------- */
 
@@ -454,6 +457,61 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    /* -------------------------------- trader ------------------------------ */
+    if (route === '/api/trader' && method === 'GET') {
+      const user = requireUser(req, res, origin);
+      if (!user) return;
+      return send(res, 200, { ok: true, ...traderStatus(db, user.id) }, origin);
+    }
+
+    if (route === '/api/trader/enable' && method === 'POST') {
+      if (!csrfGuard(req, res, origin, cookies)) return;
+      const user = requireUser(req, res, origin);
+      if (!user) return;
+      const body = await readBody(req);
+      const on = !!body.enabled;
+      audit(on ? 'trader_enabled' : 'trader_disabled', user.id, ip, null);
+      return send(res, 200, { ok: true, ...traderEnable(db, user.id, on) }, origin);
+    }
+
+    if (route === '/api/trader/config' && method === 'POST') {
+      if (!csrfGuard(req, res, origin, cookies)) return;
+      const user = requireUser(req, res, origin);
+      if (!user) return;
+      const body = await readBody(req);
+      audit('trader_config', user.id, ip, JSON.stringify(body).slice(0, 200));
+      return send(res, 200, { ok: true, ...traderConfig(db, user.id, body) }, origin);
+    }
+
+    if (route === '/api/trader/run' && method === 'POST') {
+      if (!csrfGuard(req, res, origin, cookies)) return;
+      const user = requireUser(req, res, origin);
+      if (!user) return;
+      if (!rateLimit(`traderrun:${user.id}`, 30, 3600)) return send(res, 429, { ok: false, error: 'Too many run requests.' }, origin);
+      const result = traderRun(db, user.id);
+      audit('trader_run', user.id, ip, JSON.stringify(result).slice(0, 200));
+      return send(res, 200, { ok: true, result, ...traderStatus(db, user.id) }, origin);
+    }
+
+    if (route === '/api/trader/reset' && method === 'POST') {
+      if (!csrfGuard(req, res, origin, cookies)) return;
+      const user = requireUser(req, res, origin);
+      if (!user) return;
+      audit('trader_reset', user.id, ip, null);
+      return send(res, 200, { ok: true, ...traderReset(db, user.id) }, origin);
+    }
+
+    const tclose = route.match(/^\/api\/trader\/close\/([0-9a-fA-F-]{36})$/);
+    if (tclose && method === 'POST') {
+      if (!csrfGuard(req, res, origin, cookies)) return;
+      const user = requireUser(req, res, origin);
+      if (!user) return;
+      const next = traderClose(db, user.id, tclose[1]);
+      if (!next) return send(res, 404, { ok: false, error: 'Position not found.' }, origin);
+      audit('trader_manual_close', user.id, ip, tclose[1]);
+      return send(res, 200, { ok: true, ...next }, origin);
+    }
+
     /* ------------------------------- journal ------------------------------ */
     if (route === '/api/journal' && method === 'GET') {
       const user = requireUser(req, res, origin);
@@ -527,6 +585,17 @@ const server = http.createServer(async (req, res) => {
     return send(res, status, { ok: false, error: status >= 500 ? 'Server error.' : err.message }, origin);
   }
 });
+
+// Paper engine ticker. Only accounts with enabled = 1 move; the cycle itself
+// enforces position caps, cooldowns and the daily-loss kill switch.
+setInterval(() => {
+  try {
+    const rows = db.prepare('SELECT user_id FROM trader_account WHERE enabled = 1').all();
+    for (const r of rows) {
+      try { traderRun(db, r.user_id); } catch (e) { console.error('[trader] cycle failed:', e.message); }
+    }
+  } catch (e) { console.error('[trader] ticker:', e.message); }
+}, 15 * 60_000).unref?.();
 
 server.listen(PORT, HOST, () => {
   console.log(`\n  AlphaDesk API — http://${HOST}:${PORT}`);

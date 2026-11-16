@@ -83,3 +83,12 @@ export async function syncJournal(local, api) {
 }
 
 export const AUTH_VERSION = '1.0.0';
+
+/* ------------------------------ paper trader ------------------------------ */
+
+export const traderStatus = (api) => call('/api/trader', { api });
+export const traderSetEnabled = (enabled, api) => call('/api/trader/enable', { api, method: 'POST', body: { enabled } });
+export const traderSetConfig = (config, api) => call('/api/trader/config', { api, method: 'POST', body: config });
+export const traderRun = (api) => call('/api/trader/run', { api, method: 'POST', body: {} });
+export const traderClose = (id, api) => call(`/api/trader/close/${id}`, { api, method: 'POST', body: {} });
+export const traderReset = (api) => call('/api/trader/reset', { api, method: 'POST', body: {} });

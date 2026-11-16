@@ -1625,6 +1625,141 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
+/* ------------------------------- paper desk -------------------------------- */
+
+async function viewTrade() {
+  const viewEl = $('#view');
+  if (!S.user) {
+    viewEl.innerHTML = `
+      <div class="hero"><h1>Auto-trader</h1><p>The execution engine places bracketed orders for you — on a paper account. Sign in to start it.</p></div>
+      <section class="card card-pad" style="max-width:640px">
+        <h2 style="font-size:15px;margin-bottom:8px">Why paper first</h2>
+        <p class="hint">Measured out of sample, this model returns 18.5% a year with a 57% drawdown, and buys-and-holds SPY at 13.1% with 34%. Automating it with real money before it earns a forward record would be a bet, not a strategy. The paper desk gives it that record against real prices, with every order logged.</p>
+        <div class="flex" style="margin-top:12px"><button class="btn primary" id="tradeSignIn">Sign in to start</button></div>
+      </section>`;
+    $('#tradeSignIn').addEventListener('click', () => openAuthModal('login'));
+    return;
+  }
+
+  viewEl.innerHTML = `<div class="empty"><div class="skeleton" style="height:220px"></div></div>`;
+  let st;
+  try { st = await auth.traderStatus(apiBase()); }
+  catch (e) { viewEl.innerHTML = `<div class="empty">Paper desk unavailable: ${esc(e.message)}<br /><span class="dim">Start the API with <code>node server/server.mjs</code>.</span></div>`; return; }
+
+  const pct = (v) => (Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : '—');
+  const money2 = (v) => (Number.isFinite(v) ? `$${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—');
+
+  viewEl.innerHTML = `
+    <div class="hero" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap">
+      <h1 style="font-size:22px">Auto-trader</h1>
+      <span class="badge warn">paper only</span>
+      <span class="spacer"></span>
+      <span class="hint" style="margin:0">signals as of ${esc(st.snapshotDate)} · ${st.openCount}/${st.settings.maxPositions} slots used</span>
+    </div>
+
+    <div class="kpi-grid" style="margin-bottom:14px">
+      <div class="kpi"><div class="k">Equity</div><div class="v">${money2(st.equity)}</div><div class="s ${signCls(st.returnPct)}">${pct(st.returnPct)} since ${money2(st.startEquity)}</div></div>
+      <div class="kpi"><div class="k">Realised P&amp;L</div><div class="v ${signCls(st.realized)}">${money2(st.realized)}</div><div class="s">${st.closedCount} closed trades</div></div>
+      <div class="kpi"><div class="k">Win rate</div><div class="v">${st.winRate == null ? '—' : (st.winRate * 100).toFixed(1) + '%'}</div><div class="s">avg ${st.avgR == null ? '—' : (st.avgR >= 0 ? '+' : '') + st.avgR + 'R'} per trade</div></div>
+      <div class="kpi"><div class="k">Engine</div><div class="v ${st.enabled ? 'pos' : 'mut'}" style="font-size:19px">${st.enabled ? 'RUNNING' : 'STOPPED'}</div><div class="s">${st.enabled ? 'sweeps every 15 min' : 'no new entries'}</div></div>
+    </div>
+
+    <section class="card" style="margin-bottom:14px">
+      <div class="card-head wrap" style="gap:8px">
+        <div class="flex" style="gap:8px">
+          <button class="btn ${st.enabled ? 'ghost' : 'primary'} sm" id="trToggle">${st.enabled ? 'Stop engine' : 'Start engine'}</button>
+          <button class="btn sm" id="trRun">Run cycle now</button>
+          <button class="btn sm ghost" id="trReset">Reset account</button>
+        </div>
+        <span class="spacer"></span>
+        <label class="hint" style="margin:0;display:flex;gap:6px;align-items:center">Risk per trade
+          <input type="number" id="trRisk" value="${st.settings.riskPct}" min="0.1" max="5" step="0.1" style="width:66px" /> %
+        </label>
+        <label class="hint" style="margin:0;display:flex;gap:6px;align-items:center">Max positions
+          <input type="number" id="trMax" value="${st.settings.maxPositions}" min="1" max="20" step="1" style="width:62px" />
+        </label>
+        <button class="btn sm" id="trSave">Save</button>
+      </div>
+      <div class="hint" style="padding:0 18px 12px">${st.note ? esc(st.note) : 'Engine idle.'} Guardrails: max ${st.settings.maxPositions} positions · ${st.settings.riskPct}% risk each · ${st.settings.maxNotionalPct}% notional cap · auto-stop at ${st.settings.maxDailyLossPct}% daily loss.</div>
+    </section>
+
+    <div class="row cols-2" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)">
+      <section class="card">
+        <div class="card-head"><h2>Open positions</h2><span class="card-sub">${st.openCount} live · marked to last close</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th class="no-sort">Symbol</th><th class="no-sort">Side</th><th class="no-sort">Qty</th><th class="no-sort">Entry</th><th class="no-sort">Stop</th><th class="no-sort">Target</th><th class="no-sort">Mark</th><th class="no-sort">Unreal.</th><th class="no-sort"></th></tr></thead>
+          <tbody>${st.positions.length ? st.positions.map((p) => `
+            <tr>
+              <td><span class="sym">${esc(p.symbol)}</span></td>
+              <td><span class="badge ${p.side}">${esc(p.side)}</span></td>
+              <td class="mono">${n2(p.qty, 0)}</td>
+              <td class="mono">${fmtPrice(p.entry)}</td>
+              <td class="mono neg">${fmtPrice(p.stop)}</td>
+              <td class="mono pos">${fmtPrice(p.target)}</td>
+              <td class="mono">${fmtPrice(p.mark)}</td>
+              <td class="mono ${signCls(p.unrealized)}">${p.unrealized >= 0 ? '+' : ''}${money2(p.unrealized)}</td>
+              <td><button class="btn sm ghost" data-close="${esc(p.id)}">Close</button></td>
+            </tr>`).join('') : `<tr><td colspan="9"><div class="empty">No open positions. ${st.enabled ? 'The next sweep will take the best signals.' : 'Start the engine to begin.'}</div></td></tr>`}</tbody>
+        </table></div>
+      </section>
+
+      <div class="stack">
+        <section class="card card-pad">
+          <h2 style="font-size:15px;margin-bottom:8px">Cycle log</h2>
+          <div class="stack" style="gap:6px;font-size:11.5px">
+            ${st.runs.length ? st.runs.map((r) => `<div class="flex"><span class="mono dim" style="width:118px">${new Date(r.started_at * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span><span class="flex" style="gap:6px"><span class="pill">${r.candidates ?? 0} cand</span><span class="pill">${r.opened ?? 0} open</span>${r.closed ? `<span class="pill">${r.closed} closed</span>` : ''}</span><span class="spacer"></span><span class="mono dim">${money2(r.equity)}</span></div>`).join('') : '<span class="hint">No cycles yet.</span>'}
+          </div>
+        </section>
+        <section class="card card-pad">
+          <h2 style="font-size:15px;margin-bottom:8px">Closed trades</h2>
+          <div class="stack" style="gap:5px;font-size:11.5px">
+            ${st.closed.length ? st.closed.slice(0, 10).map((c) => `<div class="flex"><span class="mono" style="width:62px">${esc(c.symbol)}</span><span class="dim" style="width:40px">${esc(c.side)}</span><span class="dim" style="flex:1">${esc(c.exit_reason || '')}</span><span class="mono ${signCls(c.r_multiple)}">${(c.r_multiple ?? 0) >= 0 ? '+' : ''}${(c.r_multiple ?? 0).toFixed(2)}R</span><span class="mono dim" style="width:78px;text-align:right">${money2(c.pnl)}</span></div>`).join('') : '<span class="hint">Nothing closed yet.</span>'}
+          </div>
+        </section>
+        <section class="card card-pad">
+          <h2 style="font-size:15px;margin-bottom:6px">Broker</h2>
+          <p class="hint" style="margin:0 0 8px">Fills happen in this app's paper book. To mirror them at a real broker, use Alpaca's paper API — official, free, and key-based:</p>
+          <pre class="mono hint" style="white-space:pre-wrap;margin:0;padding:8px;background:var(--panel-2);border-radius:8px;border:1px solid var(--line)">ALPACA_KEY_ID=...
+ALPACA_SECRET=...
+node server/server.mjs</pre>
+          <p class="hint" style="margin:8px 0 0">The adapter refuses any endpoint that is not <code>paper-api.alpaca.markets</code>. Robinhood has no public order API, so it stays a manual hand-off.</p>
+        </section>
+      </div>
+    </div>
+
+    <div class="hint" style="margin:14px 2px 0">${esc(DISCLAIMER)} Paper results are simulated fills at the signal bar's close; slippage, borrow costs and dividends are not modelled.</div>
+  `;
+
+  const refresh = async () => { await viewTrade(); };
+  $('#trToggle').addEventListener('click', async () => {
+    try { await auth.traderSetEnabled(!st.enabled, apiBase()); toast(st.enabled ? 'Engine stopped' : 'Engine started', 'ok'); await refresh(); }
+    catch (e) { toast(e.message, 'err'); }
+  });
+  $('#trRun').addEventListener('click', async () => {
+    const btn = $('#trRun'); btn.disabled = true; btn.textContent = 'Running…';
+    try {
+      const r = await auth.traderRun(apiBase());
+      toast(`Cycle: ${r.result.opened} opened, ${r.result.closed} closed`, 'ok');
+      await refresh();
+    } catch (e) { toast(e.message, 'err'); btn.disabled = false; btn.textContent = 'Run cycle now'; }
+  });
+  $('#trReset').addEventListener('click', async () => {
+    if (!confirm('Reset the paper account to its starting balance? All positions and history are deleted.')) return;
+    try { await auth.traderReset(apiBase()); toast('Paper account reset'); await refresh(); }
+    catch (e) { toast(e.message, 'err'); }
+  });
+  $('#trSave').addEventListener('click', async () => {
+    try {
+      await auth.traderSetConfig({ riskPct: +$('#trRisk').value, maxPositions: +$('#trMax').value }, apiBase());
+      toast('Limits saved', 'ok'); await refresh();
+    } catch (e) { toast(e.message, 'err'); }
+  });
+  $$('[data-close]').forEach((b) => b.addEventListener('click', async () => {
+    try { await auth.traderClose(b.dataset.close, apiBase()); toast('Position closed', 'ok'); await refresh(); }
+    catch (e) { toast(e.message, 'err'); }
+  }));
+}
+
 /* ---------------------------------- router --------------------------------- */
 
 const ROUTES = {
@@ -1637,6 +1772,7 @@ const ROUTES = {
   news: () => viewNews(),
   research: () => viewResearch(),
   settings: () => viewSettings(),
+  trade: () => viewTrade(),
 };
 
 let currentRoute = '';

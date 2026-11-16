@@ -223,3 +223,55 @@ Any service promising 99% is either (a) risking far more than it wins, (b) leaki
 future data into the backtest, or (c) lying. The Model page publishes calibration,
 rank IC, the decile ladder and a buy-and-hold benchmark precisely so you can tell
 which one you are looking at.
+
+---
+
+## Auto-trader (paper)
+
+The model can place its own trades. `server/trader.mjs` turns each signal into a
+bracketed order — entry, stop, target — against a simulated account, then marks
+the book and enforces limits. Run it from **Auto-trader** in the app.
+
+| Guardrail | Default |
+|---|---|
+| Risk per trade | 1% of equity (stop distance sets the share count) |
+| Max concurrent positions | 5 |
+| Notional cap per position | 25% of equity |
+| Daily loss kill switch | auto-disables the engine at −3% |
+| Re-entry cooldown | 1 day per symbol |
+| Signal gate | model edge ≥ +0.10R, side ≠ flat |
+| Scheduling | sweep every 15 minutes while enabled |
+
+Every fill is stamped with the signal snapshot date it came from, so the record
+is a forward log rather than a backtest relabelled as live. Positions, orders,
+cycles and closed trades are all persisted per account and visible in the UI.
+
+### Why paper, and not your broker
+
+Two reasons, both load-bearing:
+
+1. **The model hasn't earned real money yet.** Its out-of-sample record is 18.5%
+   CAGR against a 56.8% drawdown, versus buy-and-hold SPY at 13.1% and 34%. A
+   paper record is how a strategy earns the right to size up.
+2. **Robinhood has no public order API.** Their legacy auth endpoint returns 404
+   and unauthorised order endpoints breach their terms. Nothing in this repo
+   places an order there.
+
+To mirror fills at a real broker, use **Alpaca's paper API** — official, free,
+key-based:
+
+```bash
+ALPACA_KEY_ID=pk_...  ALPACA_SECRET=...  node server/server.mjs
+```
+
+`placeAlpacaBracket()` is the only function that can reach a live endpoint, and
+it refuses anything that is not `paper-api.alpaca.markets`. No keys ship here, so
+that path is untested in this build — the paper book is what was exercised.
+
+### What a "99% win rate" would actually require
+
+You can have one. Set the target to 0.2 ATR and the stop to 4 ATR and you will
+win about 95 times in 100 — while losing more on the five losses than you made on
+the ninety-five wins. Hit rate alone is not a strategy metric; expectancy is.
+That is why the desk reports R multiples, the calibration table and the
+buy-and-hold benchmark instead of a win-rate headline.
