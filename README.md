@@ -36,11 +36,19 @@ earlier years), after 0.05% costs per side and gap-aware fills:
 | Rank IC (daily) | 0.014, IR 1.37, positive on 53% of days |
 | Top-5 portfolio, 1% risk | **18.5% CAGR, 56.8% max drawdown** |
 | Same mechanics ranked by 20-day momentum | 18.2% CAGR, 56.2% max drawdown |
+| **Buy & hold SPY over the same window** | **13.1% CAGR, 34.1% max drawdown** |
 
-**Read that last row carefully.** The model does not materially beat a plain
-momentum ranking. Its value is consistent framing — probability, stop, target,
-size — not clairvoyance. Anyone selling you the opposite is selling something
-else. The app prints this comparison on its own Model page.
+**Read those last two rows carefully.** Return per unit of drawdown: model 0.33,
+momentum 0.32, **buy-and-hold SPY 0.38**. The model earned more than the index but
+with more than proportionally more pain, and it needed 2,047 trades to do it.
+
+So the honest summary is: the ranking carries real information (top decile earns
+0.72 ATR of forward return against 0.14 for the bottom), and the trade plan is
+sound, but **this portfolio does not beat simply holding the S&P 500 on a
+risk-adjusted basis**. Its value is consistent framing — probability, stop,
+target, size, and a screen that says "no trade" most of the time — not
+clairvoyance. Anyone selling you the opposite is selling something else. The app
+prints this comparison on its own Model page, next to the equity curve.
 
 ## Architecture
 

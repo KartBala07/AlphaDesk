@@ -297,6 +297,31 @@ async function main() {
   }
   const momentumPortfolio = topKPortfolio(momCandidates, { minEdge: -99 });
 
+  // Buy-and-hold SPY over exactly the window the portfolio traded, so the
+  // comparison is apples to apples rather than a different decade.
+  function buyAndHold(fromDate, toDate) {
+    const spy = series.find((s) => s.inst.symbol === 'SPY');
+    if (!spy || !fromDate) return null;
+    const bars = spy.bars;
+    let start = bars.date.findIndex((d) => d >= fromDate);
+    let end = bars.date.length - 1;
+    for (let i = bars.date.length - 1; i >= 0; i--) if (bars.date[i] <= toDate) { end = i; break; }
+    if (start < 0 || end <= start) return null;
+    const eq = bars.c.slice(start, end + 1);
+    const years = (new Date(bars.date[end]) - new Date(bars.date[start])) / (365.25 * 864e5);
+    let peak = eq[0], maxDD = 0;
+    for (const v of eq) { peak = Math.max(peak, v); maxDD = Math.max(maxDD, (peak - v) / peak); }
+    const total = eq[eq.length - 1] / eq[0] - 1;
+    return {
+      from: bars.date[start], to: bars.date[end], years: round(years, 1),
+      totalReturnPct: round(total * 100, 1),
+      cagrPct: years > 0.5 ? round(((1 + total) ** (1 / years) - 1) * 100, 1) : null,
+      maxDrawdownPct: round(maxDD * 100, 1),
+      source: 'SPY split-adjusted closes, price return only (no dividends)',
+    };
+  }
+  const buyHold = buyAndHold(portfolio.firstDate, portfolio.lastDate);
+
   const holdoutGate = metrics(allCandidates.filter((t) => t.date.slice(0, 4) >= '2024' && t.edge >= MIN_EDGE && t.pWin >= P_FLOOR));
 
   const sensitivity = SENSITIVITY.map((edge) => {
@@ -371,7 +396,7 @@ async function main() {
       note: 'Rank IC is the daily Spearman correlation between the model edge ranking and realised directional return. Above roughly 0.03 with a stable sign, the ranking carries usable information.',
     },
     deciles,
-    baseline: { buyEveryBar: stripMetrics(naiveMetrics), momentumTopK: { ...momentumPortfolio, curve: undefined } },
+    baseline: { buyEveryBar: stripMetrics(naiveMetrics), momentumTopK: { ...momentumPortfolio, curve: undefined }, buyAndHoldSPY: buyHold },
     sweep: sensitivity.map((s) => ({
       minEdgeR: s.minEdgeR, threshold: s.minEdgeR,
       selection: { ...s.perSignal, trades: s.perSignal.trades },
@@ -399,6 +424,7 @@ async function main() {
   console.log(`selection 2020-2023: ${selectionPortfolio.trades} trades ${selectionPortfolio.cagrPct}% CAGR | holdout 2024-2026: ${holdoutPortfolio.trades} trades ${holdoutPortfolio.cagrPct}% CAGR, maxDD ${holdoutPortfolio.maxDrawdownPct}%`);
   console.log(`baseline buy-every-bar: ${naiveMetrics.trades} trades exp ${naiveMetrics.expectancyR.toFixed(3)}R PF ${naiveMetrics.profitFactor?.toFixed(2)}`);
   console.log(`baseline momentum top-${TOP_K}: ${momentumPortfolio.trades} trades | CAGR ${momentumPortfolio.cagrPct}% | maxDD ${momentumPortfolio.maxDrawdownPct}% | win ${(momentumPortfolio.winRate * 100).toFixed(1)}%`);
+  if (buyHold) console.log(`baseline buy & hold SPY   : ${buyHold.from} -> ${buyHold.to} | CAGR ${buyHold.cagrPct}% | maxDD ${buyHold.maxDrawdownPct}% | total ${buyHold.totalReturnPct}%`);
   console.log(`wrote ${OUT}`);
 }
 

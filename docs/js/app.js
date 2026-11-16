@@ -683,6 +683,8 @@ function viewModel() {
   const p = b.portfolio || {};
   const curve = (b.portfolioCurve || []).map((x) => ({ x: x.x, y: x.y }));
   const bench = b.baseline?.momentumTopK || null;
+  const bh = b.baseline?.buyAndHoldSPY || null;
+  const ratio = (c, d) => (isNum(c) && isNum(d) && d > 0 ? (c / d).toFixed(2) : '—');
   const years = Object.entries(p.byYear || {}).sort();
   const cal = (b.calibration || []).filter((c) => c.observed !== null && c.n >= 30);
   const deciles = b.deciles || [];
@@ -732,14 +734,17 @@ function viewModel() {
         <h2 style="font-size:15px;margin-bottom:4px">Benchmark honesty</h2>
         <p class="hint" style="margin-bottom:10px">The same portfolio mechanics, ranked three ways. If the model cannot beat plain momentum, it is not adding information.</p>
         <div class="table-wrap"><table>
-          <thead><tr><th class="no-sort">Ranking</th><th class="no-sort">CAGR</th><th class="no-sort">Max DD</th><th class="no-sort">Win rate</th></tr></thead>
+          <thead><tr><th class="no-sort">Ranking</th><th class="no-sort">CAGR</th><th class="no-sort">Max DD</th><th class="no-sort">CAGR ÷ DD</th></tr></thead>
           <tbody>
-            <tr><td>Model edge</td><td class="mono ${signCls(p.cagrPct)}">${isNum(p.cagrPct) ? p.cagrPct.toFixed(1) + '%' : '—'}</td><td class="mono neg">${isNum(p.maxDrawdownPct) ? p.maxDrawdownPct.toFixed(0) + '%' : '—'}</td><td class="mono">${isNum(p.winRate) ? (p.winRate * 100).toFixed(0) + '%' : '—'}</td></tr>
-            <tr><td>20-day momentum</td><td class="mono ${signCls(bench?.cagrPct)}">${isNum(bench?.cagrPct) ? bench.cagrPct.toFixed(1) + '%' : '—'}</td><td class="mono neg">${isNum(bench?.maxDrawdownPct) ? bench.maxDrawdownPct.toFixed(0) + '%' : '—'}</td><td class="mono">${isNum(bench?.winRate) ? (bench.winRate * 100).toFixed(0) + '%' : '—'}</td></tr>
-            <tr><td>Buy every bar</td><td class="mono dim">—</td><td class="mono dim">—</td><td class="mono dim">${isNum(b.baseline?.buyEveryBar?.winRate) ? (b.baseline.buyEveryBar.winRate * 100).toFixed(0) + '%' : '—'}</td></tr>
+            <tr><td>Model edge (top-${b.rule.topK})</td><td class="mono ${signCls(p.cagrPct)}">${isNum(p.cagrPct) ? p.cagrPct.toFixed(1) + '%' : '—'}</td><td class="mono neg">${isNum(p.maxDrawdownPct) ? p.maxDrawdownPct.toFixed(0) + '%' : '—'}</td><td class="mono">${ratio(p.cagrPct, p.maxDrawdownPct)}</td></tr>
+            <tr><td>20-day momentum</td><td class="mono ${signCls(bench?.cagrPct)}">${isNum(bench?.cagrPct) ? bench.cagrPct.toFixed(1) + '%' : '—'}</td><td class="mono neg">${isNum(bench?.maxDrawdownPct) ? bench.maxDrawdownPct.toFixed(0) + '%' : '—'}</td><td class="mono">${ratio(bench?.cagrPct, bench?.maxDrawdownPct)}</td></tr>
+            <tr style="background:var(--panel-2)"><td>Buy &amp; hold SPY</td><td class="mono ${signCls(bh?.cagrPct)}">${isNum(bh?.cagrPct) ? bh.cagrPct.toFixed(1) + '%' : '—'}</td><td class="mono neg">${isNum(bh?.maxDrawdownPct) ? bh.maxDrawdownPct.toFixed(0) + '%' : '—'}</td><td class="mono">${ratio(bh?.cagrPct, bh?.maxDrawdownPct)}</td></tr>
           </tbody>
         </table></div>
-        <div class="hint" style="margin-top:10px">${isNum(p.cagrPct) && isNum(bench?.cagrPct) && p.cagrPct - bench.cagrPct < 1
+        <div class="hint" style="margin-top:10px">${isNum(p.cagrPct) && isNum(bh?.cagrPct) && ratio(p.cagrPct, p.maxDrawdownPct) <= ratio(bh.cagrPct, bh.maxDrawdownPct)
+          ? '<b style="color:var(--warn)">Buying and holding SPY beat this model on a risk-adjusted basis.</b> It returned ' + bh.cagrPct.toFixed(1) + '% a year with a ' + bh.maxDrawdownPct.toFixed(0) + '% drawdown; the portfolio returned ' + p.cagrPct.toFixed(1) + '% with ' + p.maxDrawdownPct.toFixed(0) + '%. More return, but more than proportionally more pain — and no screen time required. The ranking carries information; this portfolio does not yet convert it into an advantage. Treat the desk as a research surface, not a strategy.'
+          : 'The model cleared buy-and-hold on a risk-adjusted basis in this window. One window is not proof, and the drawdown above is the price of admission.'}
+        </div>
           ? '<b style="color:var(--warn)">The model does not materially beat plain momentum.</b> Treat its edge as a tiebreaker, not an oracle — that is exactly what the numbers say, so the app says it too.'
           : 'The model outpaced the momentum benchmark, though both carry deep drawdowns.'}</div>
       </section>

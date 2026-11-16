@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-15T23:47:32.930Z",
+ "generatedAt": "2026-11-16T00:11:20.057Z",
  "rule": {
   "pWinFloor": 0.3333,
   "minEdgeR": 0.1,
@@ -10151,6 +10151,15 @@
    },
    "firstDate": "2017-11-28",
    "lastDate": "2026-11-15"
+  },
+  "buyAndHoldSPY": {
+   "from": "2020-01-02",
+   "to": "2026-11-13",
+   "years": 6.9,
+   "totalReturnPct": 132.2,
+   "cagrPct": 13.1,
+   "maxDrawdownPct": 34.1,
+   "source": "SPY split-adjusted closes, price return only (no dividends)"
   }
  },
  "sweep": [
