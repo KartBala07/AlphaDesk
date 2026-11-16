@@ -133,3 +133,93 @@ trained on historical prices. It does not know the future, cannot read news in
 real time, and its output is not investment advice. Backtested results are
 hypothetical and exclude taxes and financing. Never risk money you cannot afford
 to lose.
+
+---
+
+## Terminal UI
+
+The interface follows TradingView's layout rather than a dashboard: a top
+toolbar (symbol search, section links, session state, account), a 52 px icon
+rail, a full-height chart workspace, and a status bar. Inside the terminal:
+
+- **Chart engine** (`docs/js/chart-pro.js`, no dependencies): wheel zoom anchored
+  at the cursor, drag to pan, double-click to reset, keyboard nudge.
+- **Intervals** D / W / Mo aggregated from daily bars; ranges 1M → MAX scaled to
+  the interval, not to a fixed bar count.
+- **Chart types**: candles, hollow candles, OHLC bars, line, area, Heikin-Ashi.
+- **Overlays**: EMA 20/50/200, Bollinger Bands; **panes**: volume, RSI 14, MACD.
+- **Drawing tools**: trendline, horizontal line, rectangle, Fibonacci retracement,
+  measure. Persisted per symbol in localStorage; right-click or Delete to remove.
+- **Watchlist** with the active symbol pinned, headers, and live quotes when the
+  Robinhood bridge is connected.
+- **Model rail** with the verdict, plan, drivers, risk flags, journal and the
+  broker hand-off.
+
+## Accounts, journal and the API
+
+`server/server.mjs` is a zero-dependency Node service: `node:sqlite` for storage,
+`node:crypto` for password hashing. It serves **both** the site and the API, so a
+single command gives you a working app with real sign-in:
+
+```bash
+node server/server.mjs          # http://127.0.0.1:8789  (site + API)
+```
+
+> Accounts need to talk to the API on the **same site**. `SameSite=Lax` cookies are
+> blocked cross-site, so sign-in works when the page is served by the API (as above)
+> or from a deployed HTTPS API (`COOKIE_SECURE=true` switches cookies to
+> `SameSite=None`). On GitHub Pages alone the app runs in guest mode and the journal
+> stays in localStorage — which is still fully functional.
+
+Endpoints: `/api/health`, `/api/csrf`, `/api/auth/{register,login,logout,me,password}`,
+`/api/journal` (list/add), `/api/journal/:id` (patch/delete), `/api/audit`.
+
+### What the security actually does
+
+| Control | Implementation |
+|---|---|
+| Password storage | scrypt, N=32768 r=8 p=1, 16-byte per-user salt, 64-byte key |
+| Sessions | opaque 256-bit tokens, stored only as SHA-256 digests, 30-day expiry |
+| Cookie | `HttpOnly`, `SameSite=Lax` (or `None` + `Secure` in production), `Path=/` |
+| CSRF | double-submit token, timing-safe comparison, required on every write |
+| Brute force | per-IP sliding limits, per-account lockout after 8 failures (15 min) |
+| Enumeration | uniform login errors, dummy hash for unknown accounts to equalise timing |
+| Injection | parameterised SQL everywhere; symbol/email/number validation |
+| Headers | CSP, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, HSTS when secure |
+| Transport | TLS terminated at the host; HSTS sent when `COOKIE_SECURE=true` |
+| Audit | auth events and journal changes written to an append-only table |
+
+**It is not "unhackable", and nothing is.** These controls remove the cheap,
+common attacks — credential stuffing, session theft via JavaScript, CSRF, SQL
+injection, account enumeration. What remains is operational: patch the host,
+terminate TLS, back up `server/data/`, rotate `ALLOWED_ORIGINS`, and never commit
+the data directory (it is gitignored).
+
+### Deploying it (free tier)
+
+Any host that runs Node works. Set these environment variables:
+
+```bash
+PORT=8789
+DATA_DIR=/var/data
+COOKIE_SECURE=true                     # HTTPS deployments
+ALLOWED_ORIGINS=https://your.site      # exact origin of the front end
+```
+
+Render / Fly / Railway: point the start command at `node server/server.mjs`, add a
+persistent disk mounted at `DATA_DIR`, then open the service URL — it serves the
+site and the API from one origin. On the deployed site, set the API base in
+Settings only if the front end is hosted separately.
+
+## Why not a 99% win rate
+
+A 99% hit rate is not a training target; it is a choice of payoff. If you take a
+tiny target and a wide stop you can win 99 times out of 100 and still lose money —
+the 100th trade gives back more than the previous 99 earned. Conversely, the 2:1
+geometry this model trades breaks even at 33.3%, and hit rates in the high 30s
+with positive expectancy are what a real daily-bar edge looks like.
+
+Any service promising 99% is either (a) risking far more than it wins, (b) leaking
+future data into the backtest, or (c) lying. The Model page publishes calibration,
+rank IC, the decile ladder and a buy-and-hold benchmark precisely so you can tell
+which one you are looking at.

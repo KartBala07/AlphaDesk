@@ -475,3 +475,242 @@ details.disclose > div { padding: 12px 14px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* =============================================================================
+   Terminal — TradingView-style workspace
+   ========================================================================== */
+
+.tv {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr) 312px;
+  gap: 0;
+  height: calc(100vh - 168px);
+  min-height: 640px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+/* watchlist */
+.tv-watch { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel-2); }
+.tv-watch-top { padding: 9px 10px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.tv-watch-top input { padding: 5px 8px; font-size: 11.5px; border-radius: 7px; }
+.tv-watch-list { overflow-y: auto; flex: 1; min-height: 0; }
+.tv-row {
+  display: grid; grid-template-columns: 1fr auto auto 8px; align-items: center; gap: 6px;
+  width: 100%; padding: 6px 10px; border: 0; background: transparent; color: var(--text);
+  cursor: pointer; border-left: 2px solid transparent; text-align: left;
+}
+.tv-row:hover { background: var(--panel-3); }
+.tv-row.active { background: var(--panel-3); border-left-color: var(--long); }
+.tv-row-sym { font-family: var(--mono); font-size: 11.5px; font-weight: 600; }
+.tv-row-px { font-size: 11px; color: var(--muted); }
+.tv-row-chg { font-size: 10.5px; min-width: 48px; text-align: right; }
+.tv-dot { width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+.tv-dot.long { background: var(--long); }
+.tv-dot.short { background: var(--short); }
+
+/* center column */
+.tv-center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.tv-title { display: flex; align-items: center; gap: 10px; padding: 8px 12px 2px; flex-wrap: wrap; }
+.tv-symblock { display: flex; flex-direction: column; }
+.tv-ohlc { padding: 0 12px 4px; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 15px; }
+.tv-body { display: flex; flex: 1; min-height: 0; }
+.tv-tools { display: flex; flex-direction: column; gap: 2px; padding: 6px 5px; border-right: 1px solid var(--line); background: var(--panel-2); }
+.tv-tool {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px;
+  border: 1px solid transparent; background: transparent; color: var(--dim); cursor: pointer;
+}
+.tv-tool svg { width: 16px; height: 16px; fill: currentColor; }
+.tv-tool:hover { color: var(--text); background: var(--panel-3); }
+.tv-tool.on { color: var(--long); background: var(--long-dim); border-color: var(--long-line); }
+.tv-tool-sep { height: 1px; background: var(--line); margin: 4px 3px; }
+.tv-chart { flex: 1; min-width: 0; min-height: 0; position: relative; }
+.tv-foot { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.chip {
+  padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--dim); font-size: 10.5px; font-weight: 600; cursor: pointer; letter-spacing: .02em;
+}
+.chip:hover { color: var(--text); }
+.chip.on { color: var(--long); border-color: var(--long-line); background: var(--long-dim); }
+.chip.off { opacity: .55; }
+
+/* right rail */
+.tv-rail { border-left: 1px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; background: var(--panel-2); }
+.tv-verdict { border-radius: 10px; padding: 10px 12px; border: 1px solid var(--line); background: var(--panel); }
+.tv-verdict.tv-long { border-color: var(--long-line); background: linear-gradient(180deg, var(--long-dim), transparent 70%), var(--panel); }
+.tv-verdict.tv-short { border-color: var(--short-line); background: linear-gradient(180deg, var(--short-dim), transparent 70%), var(--panel); }
+.tv-action { font-size: 25px; font-weight: 720; letter-spacing: -.03em; margin-top: 2px; }
+.tv-long .tv-action { color: var(--long); }
+.tv-short .tv-action { color: var(--short); }
+.tv-flat .tv-action { color: var(--flat); }
+.tv-plan { grid-template-columns: repeat(3, 1fr); }
+.tv-plan .plan-cell { padding: 7px 9px; }
+.tv-plan .plan-cell .k { font-size: 9px; }
+.tv-broker { display: flex; gap: 6px; flex-wrap: wrap; }
+.tv-broker .btn { flex: 1; min-width: 92px; }
+.tv-block { border-top: 1px solid var(--line-soft); padding-top: 10px; }
+.tv-block:first-of-type { border-top: 0; }
+
+/* modal */
+.modal-wrap { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.6); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 20px; }
+.modal { width: min(520px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 30px 80px -30px #000; overflow: hidden; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.modal-head .icon-btn { width: 26px; height: 26px; font-size: 12px; }
+.modal-body { padding: 14px; }
+
+@media (max-width: 1280px) {
+  .tv { grid-template-columns: 180px minmax(0, 1fr) 280px; }
+}
+@media (max-width: 1100px) {
+  .tv { grid-template-columns: minmax(0, 1fr) 280px; height: auto; }
+  .tv-watch { display: none; }
+}
+@media (max-width: 860px) {
+  .tv { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .tv-rail { border-left: 0; border-top: 1px solid var(--line); }
+  .tv-chart { height: 420px; }
+  .tv-tools { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
+.tv-watch-hdr {
+  display: grid; grid-template-columns: 1fr auto auto 8px; gap: 6px; align-items: center;
+  padding: 4px 10px 5px; border-bottom: 1px solid var(--line); background: var(--panel-2);
+  font-size: 9px; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); font-weight: 650;
+}
+.tv-watch-hdr span:nth-child(2), .tv-watch-hdr span:nth-child(3) { text-align: right; }
+.tv-row:first-child { border-top: 1px solid var(--line-soft); }
+.tv-divider { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+.tv-action { letter-spacing: .01em; word-spacing: 3px; }
+.chip:not(.on) { color: var(--dim); opacity: .62; }
+.tv-plan { grid-template-columns: repeat(3, 1fr) !important; }
+
+/* =============================================================================
+   Shell v2 — TradingView-style chrome: top toolbar, icon rail, status bar
+   ========================================================================== */
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 46px minmax(0, 1fr) 26px;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* top toolbar */
+.topbar {
+  grid-row: 1;
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  height: 46px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  z-index: 60;
+}
+.topbar .brand { padding: 0 4px 0 0; gap: 7px; }
+.topbar .brand svg { width: 25px; height: 25px; border-radius: 7px; box-shadow: none; }
+.topbar .brand-text b { font-size: 13.5px; letter-spacing: -.01em; }
+.topbar .search { max-width: 420px; flex: 0 1 420px; }
+.topbar .search input { padding: 6px 40px 6px 32px; font-size: 12.5px; border-radius: 8px; }
+.topbar .search kbd { top: 6px; right: 8px; }
+.quicknav { display: flex; gap: 2px; }
+.quicknav a {
+  padding: 5px 9px; border-radius: 7px; font-size: 12.5px; color: var(--muted); font-weight: 550;
+}
+.quicknav a:hover { background: var(--panel-2); color: var(--text); }
+.quicknav a.active { color: var(--text); background: var(--panel-3); }
+
+.mkt-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel-2); font-size: 10.5px; font-weight: 650;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--muted); white-space: nowrap;
+}
+.mkt-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--flat); }
+.mkt-pill.open::before { background: var(--long); box-shadow: 0 0 0 3px var(--long-dim); }
+.mkt-pill.closed::before { background: var(--short); box-shadow: 0 0 0 3px var(--short-dim); }
+.mkt-pill.open { color: var(--long); border-color: var(--long-line); }
+
+.acct-btn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; color: var(--muted);
+  font-size: 11.5px; font-weight: 600; max-width: 190px;
+}
+.acct-btn:hover { color: var(--text); border-color: var(--dim); }
+.acct-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); flex: none; }
+.acct.signed .acct-dot { background: var(--long); box-shadow: 0 0 0 3px var(--long-dim); }
+.acct-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* workspace = rail + content */
+.workspace { display: grid; grid-template-columns: 52px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+
+.rail {
+  position: relative; inset: auto; width: 52px; height: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 0; border-right: 1px solid var(--line); background: var(--panel);
+  overflow-y: auto; overflow-x: hidden; z-index: 40;
+}
+.rail .nav { align-items: center; gap: 1px; width: 100%; }
+.rail .nav-item {
+  width: 38px; height: 36px; padding: 0; justify-content: center; border-radius: 8px;
+}
+.rail .nav-item span { display: none; }
+.rail .nav-item svg { width: 18px; height: 18px; }
+.rail .nav-item:hover { background: var(--panel-2); }
+.rail .nav-item.active { background: var(--panel-3); box-shadow: inset 0 0 0 1px var(--line); }
+.rail-sep { width: 22px; height: 1px; background: var(--line); margin: 6px 0; }
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-bottom: 4px; width: 100%; }
+.rail .regime-mini { justify-content: center; width: 100%; }
+.rail .regime-mini .regime-text { display: none; }
+
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.view {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  padding: 14px; max-width: none; margin: 0; width: 100%;
+}
+.view > .tv { height: calc(100vh - 46px - 26px - 28px); }
+
+/* status bar */
+.statusbar {
+  grid-row: 3; display: flex; align-items: center; gap: 12px; padding: 0 10px;
+  border-top: 1px solid var(--line); background: var(--panel); font-size: 10.5px; color: var(--muted);
+  z-index: 50; overflow: hidden; white-space: nowrap;
+}
+.sb-item { overflow: hidden; text-overflow: ellipsis; }
+.sb-item.mono { font-family: var(--mono); }
+#sbApi.ok { color: var(--long); }
+#sbApi.off { color: var(--dim); }
+#sbApi.err { color: var(--short); }
+
+/* footer inside legacy views is gone; keep spacing sane */
+.foot { display: none; }
+
+/* auth modal extras */
+.auth-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.auth-tabs button {
+  flex: 1; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.auth-tabs button.on { color: var(--text); border-color: var(--long-line); background: var(--long-dim); }
+.auth-err { color: var(--short); font-size: 11.5px; min-height: 15px; margin-top: 6px; }
+.auth-ok { color: var(--long); font-size: 11.5px; min-height: 15px; margin-top: 6px; }
+.pw-meter { height: 3px; border-radius: 99px; background: var(--panel-3); margin-top: 6px; overflow: hidden; }
+.pw-meter > i { display: block; height: 100%; width: 0; background: var(--short); transition: width .2s, background .2s; }
+
+@media (max-width: 1180px) { .quicknav { display: none; } }
+@media (max-width: 860px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .rail {
+    position: fixed; top: 46px; bottom: 26px; left: 0; transform: translateX(-100%);
+    transition: transform .18s ease; box-shadow: 0 0 40px rgba(0,0,0,.6); width: 60px;
+  }
+  .rail.open { transform: none; }
+  .topbar .search { flex: 1 1 auto; max-width: none; }
+  .statusbar { gap: 8px; }
+  .statusbar .sb-item:nth-child(3) { display: none; }
+}

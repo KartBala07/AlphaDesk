@@ -89,3 +89,70 @@ export async function dailyBars(symbol, apiKey, outputsize = 1200) {
 }
 
 export function clearLiveCache() { cache.clear(); }
+
+/* ------------------------- Robinhood bridge (local) ------------------------ */
+
+/**
+ * The bridge is a small process on your own machine (tools/robinhood-bridge.mjs)
+ * that proxies Robinhood's public market data with CORS. It holds no
+ * credentials and cannot trade. If it is not running, every function here
+ * rejects with a clear message and the app falls back to the bundled snapshot.
+ */
+export const DEFAULT_BRIDGE = 'http://127.0.0.1:8788';
+
+const bridgeBase = (url) => (url || DEFAULT_BRIDGE).replace(/\/+$/, '');
+
+async function bridgeFetch(path, { bridgeUrl, timeoutMs = 7000 } = {}) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${bridgeBase(bridgeUrl)}${path}`, { signal: ctl.signal });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `bridge HTTP ${res.status}`);
+    return body;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Bridge did not answer — is tools/robinhood-bridge.mjs running?');
+    if (e instanceof TypeError) throw new Error('Bridge unreachable on 127.0.0.1:8788. Start it with: node tools/robinhood-bridge.mjs');
+    throw e;
+  } finally { clearTimeout(timer); }
+}
+
+export async function bridgeHealth(bridgeUrl) {
+  return cached(`bridge:health:${bridgeBase(bridgeUrl)}`, () => bridgeFetch('/health', { bridgeUrl }));
+}
+
+export async function rhQuotes(symbols, bridgeUrl) {
+  const list = symbols.filter(Boolean);
+  if (!list.length) return {};
+  const key = `rh:q:${list.join(',')}`;
+  return cached(key, async () => {
+    const j = await bridgeFetch(`/quotes?symbols=${encodeURIComponent(list.join(','))}`, { bridgeUrl });
+    const out = {};
+    for (const q of j.quotes || []) out[q.symbol] = { ...q, changePct: q.previousClose ? ((q.last / q.previousClose) - 1) * 100 : null, source: 'robinhood' };
+    return out;
+  });
+}
+
+export async function rhHistory(symbol, { span = 'year', interval = 'day', bridgeUrl } = {}) {
+  return cached(`rh:h:${symbol}:${span}:${interval}`, async () => {
+    const j = await bridgeFetch(`/history?symbol=${encodeURIComponent(symbol)}&span=${span}&interval=${interval}`, { bridgeUrl });
+    return j.bars || [];
+  });
+}
+
+export async function rhMarketHours(exchange = 'XNAS', bridgeUrl) {
+  return cached(`rh:hours:${exchange}`, async () => {
+    const j = await bridgeFetch(`/hours?exchange=${exchange}`, { bridgeUrl });
+    return j;
+  });
+}
+
+/** Deep link into the Robinhood app / web for a symbol. */
+export function robinhoodLink(symbol) {
+  if (!symbol) return 'https://robinhood.com';
+  const s = String(symbol).toUpperCase();
+  if (s.endsWith('-USD')) return `https://robinhood.com/crypto/${s.replace('-USD', '')}`;
+  const map = { '^VIX': null, '^IXIC': null };
+  if (map[s] === null) return 'https://robinhood.com/markets';
+  return `https://robinhood.com/stocks/${s.replace('-', '.')}`;
+}

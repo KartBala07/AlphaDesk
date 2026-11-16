@@ -3,78 +3,92 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AlphaDesk — AI market analysis</title>
-<meta name="description" content="A quantitative signal engine built on 10 years of market data. Long/short bias, take profit and stop loss for any stock, ETF or crypto — plus live financial news and chart-image analysis." />
+<title>AlphaDesk — market terminal</title>
+<meta name="description" content="A TradingView-style market terminal with a walk-forward signal model, drawing tools, live news and a server-backed trade journal." />
 <meta name="color-scheme" content="dark light" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0d10'/%3E%3Cpath d='M7 22l6-7 4 4 8-11' stroke='%232ee6a8' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="css/app.css" />
+<link rel="stylesheet" href="css/app.css?v=4" />
 <script>
   /* Local-only error collector: lets QA (and a curious user) see what broke. */
   window.__errors = [];
   addEventListener('error', (e) => window.__errors.push(String((e && (e.message || e.error)) || 'error')));
-  addEventListener('unhandledrejection', (e) => window.__errors.push('rejection: ' + String((e.reason && e.reason.message) || e.reason)));
+  addEventListener('unhandledrejection', (e) => window.__errors.push('rejection: ' + String((e.reason && (e.reason.stack || e.reason.message)) || e.reason)));
 </script>
 </head>
 <body>
 <div class="app" id="app">
-  <aside class="sidebar" id="sidebar">
+
+  <header class="topbar">
+    <button class="icon-btn only-mobile" id="menuBtn" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <a class="brand" href="#/dashboard" aria-label="AlphaDesk home">
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="url(#g1)"/><path d="M7 22l6-7 4 4 8-11" stroke="#04120d" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g1" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#2ee6a8"/><stop offset="1" stop-color="#22c3a0"/></linearGradient></defs></svg>
-      <span class="brand-text">
-        <b>AlphaDesk</b>
-        <em>quant signal desk</em>
-      </span>
+      <span class="brand-text"><b>AlphaDesk</b></span>
     </a>
 
-    <nav class="nav" id="nav">
-      <button class="nav-item" data-route="dashboard"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9zm10 7h6v-9h-6v9zM4 20h6v-4H4v4zM14 8h6V4h-6v4z"/></svg><span>Dashboard</span></button>
-      <button class="nav-item" data-route="analyze"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 3-5 6 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="11" r="1.6"/></svg><span>Analyzer</span></button>
-      <button class="nav-item" data-route="scan"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 011-1h3M20 8V5a1 1 0 00-1-1h-3M4 16v3a1 1 0 001 1h3M20 16v3a1 1 0 01-1 1h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="8" y="9" width="8" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Chart Scan</span></button>
-      <button class="nav-item" data-route="screener"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Screener</span></button>
-      <button class="nav-item" data-route="model"><svg viewBox="0 0 24 24"><path d="M4 19V9m5 10V5m5 14v-7m5 7V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Model</span></button>
-      <button class="nav-item" data-route="news"><svg viewBox="0 0 24 24"><path d="M5 5h11a2 2 0 012 2v10a2 2 0 002 2H7a2 2 0 01-2-2V5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h7M8 13h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>News wire</span></button>
-      <button class="nav-item" data-route="research"><svg viewBox="0 0 24 24"><path d="M5 4h9l5 5v11H5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 12h7M8 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Research</span></button>
-      <button class="nav-item" data-route="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10l1.4 1.4m0-12.8l-1.4 1.4m-10 10L5.6 18.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Settings</span></button>
+    <form class="search" id="searchForm" autocomplete="off">
+      <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="searchInput" type="search" placeholder="Symbol, ETF or crypto — AAPL, NVDA, BTC" spellcheck="false" />
+      <div class="suggest" id="suggest" hidden></div>
+      <kbd>/</kbd>
+    </form>
+
+    <nav class="quicknav" aria-label="Sections">
+      <a href="#/analyze">Terminal</a>
+      <a href="#/screener">Screener</a>
+      <a href="#/model">Model</a>
+      <a href="#/news">News</a>
     </nav>
 
-    <div class="sidebar-foot">
-      <div class="regime-mini" id="regimeMini">
-        <span class="dot"></span><span class="regime-text">loading market…</span>
-      </div>
-      <div class="disclaimer-mini">Research tool. Not investment advice.</div>
+    <span class="spacer"></span>
+
+    <span class="mkt-pill" id="mktPill" title="US equity session">—</span>
+    <span class="data-chip" id="dataChip">—</span>
+    <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
+      <svg viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1111.2 3a7 7 0 009.8 9.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="acct" id="acctChip">
+      <button class="acct-btn" id="acctBtn" title="Account"><span class="acct-dot"></span><span class="acct-label">Sign in</span></button>
     </div>
-  </aside>
+  </header>
 
-  <main class="main">
-    <header class="topbar">
-      <button class="icon-btn only-mobile" id="menuBtn" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-      <form class="search" id="searchForm" autocomplete="off">
-        <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input id="searchInput" type="search" placeholder="Search any ticker, ETF or crypto — AAPL, NVDA, BTC, SPY…" spellcheck="false" />
-        <div class="suggest" id="suggest" hidden></div>
-        <kbd>/</kbd>
-      </form>
-      <div class="topbar-right">
-        <span class="data-chip" id="dataChip" title="Dataset snapshot date">—</span>
-        <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
-          <svg viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1111.2 3a7 7 0 009.8 9.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-        </button>
+  <div class="workspace">
+    <aside class="rail" id="sidebar">
+      <nav class="nav" id="nav" aria-label="Primary">
+        <button class="nav-item" data-route="dashboard" title="Dashboard"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9zm10 7h6v-9h-6v9zM4 20h6v-4H4v4zM14 8h6V4h-6v4z"/></svg><span>Dashboard</span></button>
+        <button class="nav-item" data-route="analyze" title="Terminal"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 3-5 6 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="11" r="1.6"/></svg><span>Terminal</span></button>
+        <button class="nav-item" data-route="scan" title="Chart scan"><svg viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 011-1h3M20 8V5a1 1 0 00-1-1h-3M4 16v3a1 1 0 001 1h3M20 16v3a1 1 0 01-1 1h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="8" y="9" width="8" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Chart scan</span></button>
+        <button class="nav-item" data-route="screener" title="Screener"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Screener</span></button>
+        <button class="nav-item" data-route="model" title="Model"><svg viewBox="0 0 24 24"><path d="M4 19V9m5 10V5m5 14v-7m5 7V8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Model</span></button>
+        <button class="nav-item" data-route="news" title="News wire"><svg viewBox="0 0 24 24"><path d="M5 5h11a2 2 0 012 2v10a2 2 0 002 2H7a2 2 0 01-2-2V5z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 9h7M8 13h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>News</span></button>
+        <button class="nav-item" data-route="research" title="Research"><svg viewBox="0 0 24 24"><path d="M5 4h9l5 5v11H5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 12h7M8 16h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Research</span></button>
+      </nav>
+      <div class="rail-sep"></div>
+      <nav class="nav" aria-label="System">
+        <button class="nav-item" data-route="settings" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10l1.4 1.4m0-12.8l-1.4 1.4m-10 10L5.6 18.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Settings</span></button>
+      </nav>
+      <div class="rail-foot">
+        <div class="regime-mini" id="regimeMini"><span class="dot"></span></div>
       </div>
-    </header>
+    </aside>
 
-    <div class="view" id="view" tabindex="-1"></div>
+    <main class="main">
+      <div class="view" id="view" tabindex="-1"></div>
+    </main>
+  </div>
 
-    <footer class="foot">
-      <span>AlphaDesk · built on 10 years of daily OHLCV data · model trained offline, inference runs in your browser</span>
-      <span class="foot-links">
-        <a href="#/model">Methodology</a><a href="#/research">Research</a><a href="#/settings">Data &amp; keys</a>
-      </span>
-    </footer>
-  </main>
+  <footer class="statusbar">
+    <span class="sb-item" id="sbSym">—</span>
+    <span class="sb-item" id="sbFeed">snapshot</span>
+    <span class="sb-item" id="sbData">—</span>
+    <span class="spacer"></span>
+    <span class="sb-item" id="sbApi">API offline</span>
+    <span class="sb-item mono" id="sbClock">—</span>
+    <span class="sb-item dim">Not investment advice</span>
+  </footer>
 </div>
 
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

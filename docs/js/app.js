@@ -8,8 +8,10 @@ import {
   analyze, backtestWalkForward, normaliseBars, buildContext, ema, rsi, atr, metrics,
   TP_MULT, SL_MULT, HORIZON, DISCLAIMER, ENGINE_VERSION, FEATURE_LABELS,
 } from './engine.js';
-import { CandleChart, LineChart, barChart, sparkline, fmtPrice } from './charts.js';
+import { LineChart, barChart, sparkline, fmtPrice } from './charts.js';
+import { ProChart } from './chart-pro.js?v=5';
 import * as live from './live.js';
+import * as auth from './auth.js';
 
 /* ---------------------------------- utils --------------------------------- */
 
@@ -40,6 +42,8 @@ function toast(msg, kind = '') {
 
 const DEFAULT_SETTINGS = {
   account: 25000, riskPct: 1, theme: 'dark', twelveDataKey: '',
+  bridgeUrl: 'http://127.0.0.1:8788', liveRh: false, journalExport: true,
+  apiBase: 'http://127.0.0.1:8789',
   aiProvider: 'openai', aiModel: '', aiKey: '', autoLive: true,
 };
 const loadSettings = () => {
@@ -349,239 +353,400 @@ async function renderDashNews() {
   }
 }
 
-/* --------------------------------- analyzer -------------------------------- */
+/* ------------------------------- terminal ---------------------------------- */
+/* A TradingView-style workspace: watchlist, interactive chart, model rail.     */
 
-async function viewAnalyze(symbol) {
+const CHART_DEFAULTS = { interval: '1D', type: 'candles', range: '1Y', overlays: ['ema20', 'ema50', 'ema200'], panes: ['volume'] };
+const chartPrefs = () => ({ ...CHART_DEFAULTS, ...(S.settings.chart || {}) });
+const setChartPrefs = (patch) => { S.settings.chart = { ...chartPrefs(), ...patch }; saveSettings(); };
+
+const drawKey = (sym) => `alphadesk.drawings.${sym}`;
+const loadDrawings = (sym) => { try { return JSON.parse(localStorage.getItem(drawKey(sym)) || '[]'); } catch { return []; } };
+const saveDrawings = (sym, list) => { try { localStorage.setItem(drawKey(sym), JSON.stringify(list)); } catch { /* quota */ } };
+
+const journalAll = () => { try { return JSON.parse(localStorage.getItem('alphadesk.journal') || '[]'); } catch { return []; } };
+const journalSave = (list) => localStorage.setItem('alphadesk.journal', JSON.stringify(list));
+
+function openModal(title, bodyHTML, onMount) {
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-wrap';
+  wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head"><b>${esc(title)}</b><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="modal-body">${bodyHTML}</div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
+  document.addEventListener('keydown', function onKey(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } });
+  onMount?.(wrap, close);
+  return { close };
+}
+
+function orderTicket(a, inst) {
+  const t = a.trade;
+  if (!t) return `${a.symbol} — NO TRADE\nModel: no side clears the gate (P(target) max ${(Math.max(a.probs.long.win, a.probs.short.win) * 100).toFixed(1)}%).\nAs of ${dateOf(a.asOf)}. Not investment advice.`;
+  return [
+    `${a.symbol} — ${t.side === 'long' ? 'BUY' : 'SELL SHORT'} (limit ${fmtPrice(t.entry)})`,
+    `Qty: ${t.shares}`,
+    `Stop: ${fmtPrice(t.stop)}  (${t.stopDistancePct}%)`,
+    `Target 1: ${fmtPrice(t.tp1)}  (sell half)`,
+    `Target 2: ${fmtPrice(t.target)}  (${t.riskReward})`,
+    `Risk: ${money(t.riskCash)} at stop · ${S.settings.riskPct}% of ${money(S.settings.account)}`,
+    `Model: P(target) ${(t.side === 'short' ? a.probs.short.win : a.probs.long.win * 100).toFixed(0)}% · edge ${rmult(a.edgeR)} · ${esc(a.conviction)}`,
+    `Signal bar: ${dateOf(a.asOf)}. Not investment advice.`,
+  ].join('\n');
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  }
+}
+
+async function viewTerminal(symbol) {
   const viewEl = $('#view');
   if (!symbol) {
-    const top = [...S.signals].sort((a, x) => x.edgeR - a.edgeR).slice(0, 6);
+    const top = [...S.signals].sort((a, x) => x.edgeR - a.edgeR).slice(0, 8);
     viewEl.innerHTML = `
-      <div class="hero"><h1>Analyzer</h1><p>Search a ticker above, or start from one of the strongest current readings.</p></div>
-      <div class="nets">
-        ${top.map((s) => `<a class="net" href="#/analyze/${esc(s.symbol)}"><em>${esc(s.cls)}</em><b>${esc(s.symbol)} · ${fmtPrice(s.price)}</b><span>${esc(s.name)}</span><span style="margin-top:6px">${sideBadge(s.side, s.conviction)} <span class="mono ${signCls(s.edgeR)}">${rmult(s.edgeR)}</span></span></a>`).join('')}
-      </div>`;
+      <div class="hero"><h1>Terminal</h1><p>Search a ticker above, or open one of the strongest current readings. Inside you get a pan/zoom chart with drawing tools, a watchlist, and the model's read in the rail.</p></div>
+      <div class="nets">${top.map((s) => `<a class="net" href="#/analyze/${esc(s.symbol)}"><em>${esc(s.cls)}</em><b>${esc(s.symbol)} · ${fmtPrice(s.price)}</b><span>${esc(s.name)}</span><span style="margin-top:6px">${sideBadge(s.side, s.conviction)} <span class="mono ${signCls(s.edgeR)}">${rmult(s.edgeR)}</span></span></a>`).join('')}</div>`;
     return;
   }
   if (!S.bySymbol.has(symbol)) {
     viewEl.innerHTML = `<div class="hero"><h1>${esc(symbol)}</h1><p>This ticker is not in the bundled ${S.universe.length}-symbol dataset.</p></div>
-      <section class="card card-pad"><p class="hint">The dataset ships with ${S.universe.length} instruments and 10 years of daily bars each. To analyse any other ticker, add a free Twelve Data API key in <a href="#/settings">Settings</a> — the app will then fetch its daily history on demand and run the same model.</p>
-      <div class="flex" style="margin-top:10px"><a class="btn" href="#/settings">Open settings</a><a class="btn ghost" href="#/news">Read news for ${esc(symbol)}</a></div></section>`;
+      <section class="card card-pad"><p class="hint">Add a free Twelve Data key in <a href="#/settings">Settings</a> to fetch its history on demand, or connect the Robinhood bridge for live quotes and daily history.</p>
+      <div class="flex" style="margin-top:10px"><a class="btn" href="#/settings">Open settings</a><a class="btn ghost" href="#/news">News for ${esc(symbol)}</a></div></section>`;
     return;
   }
 
-  viewEl.innerHTML = `<div class="empty"><div class="skeleton" style="height:180px;max-width:800px;margin:0 auto 12px"></div><div class="skeleton" style="height:320px"></div></div>`;
-  let a;
-  try { a = await runAnalysis(symbol); } catch (e) { viewEl.innerHTML = `<div class="empty">Could not analyse ${esc(symbol)}: ${esc(e.message)}</div>`; return; }
+  viewEl.innerHTML = `<div class="empty"><div class="skeleton" style="height:520px"></div></div>`;
+  const inst = S.bySymbol.get(symbol);
+  let a, bars;
+  try {
+    [a, bars] = await Promise.all([runAnalysis(symbol), getBars(symbol)]);
+  } catch (e) { viewEl.innerHTML = `<div class="empty">Could not load ${esc(symbol)}: ${esc(e.message)}</div>`; return; }
   if (!a.ok) { viewEl.innerHTML = `<div class="empty">${esc(a.error)}</div>`; return; }
 
+  const prefs = chartPrefs();
   const side = a.signal;
-  const color = side === 'long' ? 'var(--long)' : side === 'short' ? 'var(--short)' : 'var(--flat)';
   const t = a.trade;
-  const bars = await getBars(symbol);
-  const replay = S.model.folds?.length ? backtestWalkForward({ bars, ctx: await getContext(), model: S.model, inst: S.bySymbol.get(symbol), threshold: threshold() }) : { trades: [], metrics: { trades: 0 } };
-  const inst = S.bySymbol.get(symbol);
-  const hist = `${dateOf(inst.first)} → ${dateOf(inst.last)}`;
+  const open = journalAll().filter((j) => j.status === 'open');
 
   viewEl.innerHTML = `
-    <div class="flex wrap" style="margin-bottom:12px">
-      <div>
-        <h1 style="font-size:24px">${esc(a.symbol)} <span class="dim" style="font-weight:400;font-size:15px">${esc(a.name || '')}</span></h1>
-        <div class="flex" style="gap:8px;margin-top:2px">
-          <span class="pill">${esc(inst.cls)}</span><span class="pill">${esc(inst.sector || '—')}</span>
-          <span class="pill">${esc(hist)}</span>
-          <span class="pill" title="Bars used">${n2(inst.count, 0)} bars</span>
-        </div>
-      </div>
-      <span class="spacer"></span>
-      <div style="text-align:right">
-        <div class="num-big">${fmtPrice(a.price)}</div>
-        <div class="mono ${signCls(a.change)}">${pctRaw(a.change)} <span class="dim">1d</span></div>
-      </div>
-    </div>
+    <div class="tv" id="tv">
+      <aside class="tv-watch">
+        <div class="tv-watch-top"><span class="label-xs">Watchlist</span><input id="tvFilter" placeholder="Filter" spellcheck="false" /></div>
+        <div class="tv-watch-hdr"><span>Symbol</span><span>Last</span><span>Chg</span><span></span></div>
+        <div class="tv-watch-list" id="tvList"></div>
+      </aside>
 
-    <div class="verdict ${side}" style="margin-bottom:14px">
-      <div class="verdict-top">
-        <div style="min-width:250px">
-          <div class="verdict-action"><small>Model verdict</small>${side === 'long' ? 'GO LONG' : side === 'short' ? 'GO SHORT' : 'NO TRADE'}</div>
-          <div class="verdict-meta" style="margin-top:10px">
-            <span>${sideBadge(side, a.conviction)}</span>
-            <span>Expectancy <b class="${signCls(a.edgeR)}">${rmult(a.edgeR)}</b> per trade after est. costs</span>
-            <span>Signal bar <b>${esc(dateOf(a.asOf))}</b> · ATR <b>${fmtPrice(a.atr)}</b> (${a.atrPct.toFixed(1)}% of price)</span>
-            <span>Directional confidence <b>${(a.directionProb * 100).toFixed(1)}%</b></span>
+      <section class="tv-center">
+        <div class="tv-title">
+          <div class="tv-symblock">
+            <div class="flex" style="gap:8px">
+              <b class="mono" style="font-size:17px">${esc(symbol)}</b>
+              <span class="dim" style="font-size:12px">${esc(inst.name || '')}</span>
+              <span class="pill" style="padding:1px 7px">${esc(inst.cls)}</span>
+            </div>
+            <div class="flex" style="gap:9px;align-items:baseline;margin-top:2px">
+              <span class="num-big" id="tvLast" style="font-size:26px">${fmtPrice(a.price)}</span>
+              <span class="mono ${signCls(a.change)}" id="tvChg">${pctRaw(a.change)}</span>
+              <span class="hint" id="tvSrc" style="margin:0"></span>
+            </div>
+          </div>
+          <span class="spacer"></span>
+          <div class="seg" id="tvIv">
+            ${[['1D', 'D'], ['1W', 'W'], ['1M', 'Mo']].map(([x, l]) => `<button data-iv="${x}" class="${prefs.interval === x ? 'on' : ''}" title="${x === '1D' ? 'Daily' : x === '1W' ? 'Weekly' : 'Monthly'}">${l}</button>`).join('')}
+          </div>
+          <div class="tv-divider"></div>
+          <div class="seg" id="tvRg">
+            ${['1M', '3M', '6M', 'YTD', '1Y', '2Y', '5Y', 'MAX'].map((x) => `<button data-rg="${x}" class="${prefs.range === x ? 'on' : ''}">${x}</button>`).join('')}
           </div>
         </div>
-        ${gaugeSVG(side === 'short' ? a.probs.short.win : a.probs.long.win, color, side === 'flat' ? 'best-side P(target)' : 'P(target before stop)', true)}
-        <div class="verdict-meta" style="flex:1;min-width:210px">
-          <span class="label-xs">Probabilities</span>
-          <span>Long → target <b class="pos">${(a.probs.long.win * 100).toFixed(1)}%</b> · stop <b class="neg">${(a.probs.long.loss * 100).toFixed(1)}%</b> · timeout <b>${(a.probs.long.timeout * 100).toFixed(1)}%</b></span>
-          <span>Short → target <b class="pos">${(a.probs.short.win * 100).toFixed(1)}%</b> · stop <b class="neg">${(a.probs.short.loss * 100).toFixed(1)}%</b> · timeout <b>${(a.probs.short.timeout * 100).toFixed(1)}%</b></span>
-          <span class="hint">Gate in force: P(target) ≥ ${((S.backtest?.rule?.breakevenHitRate ?? 0.3333) * 100).toFixed(1)}% (the break-even rate for 2:1) and expectancy &gt; +${(S.backtest?.rule?.minEdgeR ?? 0.10).toFixed(2)}R after costs.</span>
-        </div>
-      </div>
 
-      ${t ? `
-      <div class="plan-grid" style="margin-top:16px">
-        <div class="plan-cell"><div class="k">Entry</div><div class="v">${fmtPrice(t.entry)}</div><div class="s">${side === 'long' ? 'buy' : 'sell short'} at last close</div></div>
-        <div class="plan-cell stop"><div class="k">Stop loss</div><div class="v">${fmtPrice(t.stop)}</div><div class="s">${t.stopDistancePct}% away · ${SL_MULT.toFixed(1)}×ATR</div></div>
-        <div class="plan-cell target"><div class="k">Take profit 1</div><div class="v">${fmtPrice(t.tp1)}</div><div class="s">1.0×ATR · scale 50%</div></div>
-        <div class="plan-cell target"><div class="k">Take profit 2</div><div class="v">${fmtPrice(t.target)}</div><div class="s">${TP_MULT.toFixed(1)}×ATR · model's target</div></div>
-        <div class="plan-cell"><div class="k">Risk / share</div><div class="v">${fmtPrice(t.riskPerShare)}</div><div class="s">reward ${fmtPrice(t.rewardPerShare)}</div></div>
-        <div class="plan-cell"><div class="k">Position size</div><div class="v">${n2(t.shares, 0)}</div><div class="s">${money(t.notional)} notional</div></div>
-        <div class="plan-cell"><div class="k">Risk at stop</div><div class="v">${money(t.riskCash)}</div><div class="s">${S.settings.riskPct}% of ${money(S.settings.account)}</div></div>
-        <div class="plan-cell"><div class="k">Reward : risk</div><div class="v">${t.riskReward}</div><div class="s">at target 2</div></div>
-      </div>
-      <div class="hint" style="margin-top:10px">${esc(t.invalidation)}</div>` : `
-      <div class="hint" style="margin-top:14px">Neither side clears the gate. The model is saying the setup is not worth the risk — the strongest reading available is ${(Math.max(a.probs.long.win, a.probs.short.win) * 100).toFixed(1)}% against a ${(threshold() * 100).toFixed(0)}% requirement. Sitting out <em>is</em> the signal.</div>`}
-    </div>
+        <div class="tv-ohlc" id="tvOhlc"></div>
 
-    <div class="row cols-2" style="margin-bottom:14px;grid-template-columns:minmax(0,1.75fr) minmax(0,1fr)">
-      <section class="card">
-        <div class="card-head">
-          <h3>Price action</h3>
-          <div class="seg" id="tfSeg">${['3M', '6M', '1Y', '2Y', '5Y', '10Y'].map((x) => `<button data-tf="${x}" class="${x === '1Y' ? 'on' : ''}">${x}</button>`).join('')}</div>
+        <div class="tv-body">
+          <div class="tv-tools" id="tvTools">
+            ${[
+              ['cursor', '<path d="M5 3l14 8-6 1.6L10 19z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'],
+              ['trend', '<path d="M4 19L20 5" stroke="currentColor" stroke-width="1.8"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="5" r="2"/>'],
+              ['hline', '<path d="M3 12h18" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2"/>'],
+              ['rect', '<rect x="4" y="6" width="16" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/>'],
+              ['fib', '<path d="M4 7h16M4 11h16M4 15h16M4 19h16" stroke="currentColor" stroke-width="1.3"/>'],
+              ['measure', '<path d="M4 17L17 4M14 4h3v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'],
+            ].map(([tool, svg]) => `<button class="tv-tool ${prefs.tool === tool ? 'on' : ''}" data-tool="${tool}" title="${tool}"><svg viewBox="0 0 24 24">${svg}</svg></button>`).join('')}
+            <div class="tv-tool-sep"></div>
+            <button class="tv-tool" id="tvUndo" title="Undo drawing"><svg viewBox="0 0 24 24"><path d="M8 7H15a5 5 0 010 10H9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M11 4L7 7l4 3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button class="tv-tool" id="tvClear" title="Clear drawings"><svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M8 7l1 13h6l1-13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+          </div>
+          <div class="tv-chart" id="chartHost"></div>
         </div>
-        <div id="priceChart" style="padding:2px 4px 6px"></div>
-        <div class="legend" style="padding:0 18px 14px">
-          <span><i style="background:#5aa9ff"></i>EMA 50</span>
-          <span><i style="background:#ffb84d"></i>EMA 200</span>
-          <span><i style="background:var(--short)"></i>Stop</span>
-          <span><i style="background:var(--long)"></i>Target</span>
+
+        <div class="tv-foot">
+          <div class="seg" id="tvType">
+            ${[['candles', 'Candles'], ['hollow', 'Hollow'], ['bars', 'Bars'], ['line', 'Line'], ['area', 'Area'], ['heikin', 'Heikin Ashi']].map(([x, l]) => `<button data-type="${x}" class="${prefs.type === x ? 'on' : ''}">${l}</button>`).join('')}
+          </div>
+          <div class="flex wrap" id="tvInd" style="gap:5px">
+            ${[['ema20', 'EMA 20'], ['ema50', 'EMA 50'], ['ema200', 'EMA 200'], ['bb', 'Bollinger'], ['volume', 'Volume'], ['rsi', 'RSI'], ['macd', 'MACD']].map(([x, l]) => {
+              const on = prefs.overlays.includes(x) || prefs.panes.includes(x);
+              return `<button class="chip ${on ? 'on' : ''}" data-ind="${x}">${l}</button>`;
+            }).join('')}
+          </div>
+          <span class="spacer"></span>
+          <span class="hint" id="tvStatus" style="margin:0"></span>
         </div>
       </section>
 
-      <div class="stack">
-        <section class="card card-pad">
-          <h3 style="margin-bottom:10px">What is driving the score</h3>
+      <aside class="tv-rail">
+        <div class="tv-verdict tv-${side}">
+          <div class="flex"><span class="label-xs">Model read</span><span class="spacer"></span><span class="dim mono" style="font-size:10.5px">${esc(dateOf(a.asOf))}</span></div>
+          <div class="tv-action">${side === 'long' ? 'GO LONG' : side === 'short' ? 'GO SHORT' : 'NO TRADE'}</div>
+          <div class="flex wrap" style="gap:6px;margin-top:6px">
+            ${sideBadge(side, a.conviction)}
+            <span class="pill mono">P(TP) ${((side === 'short' ? a.probs.short.win : a.probs.long.win) * 100).toFixed(0)}%</span>
+            <span class="pill mono ${signCls(a.edgeR)}">${rmult(a.edgeR)}</span>
+          </div>
+        </div>
+
+        ${t ? `
+        <div class="plan-grid tv-plan">
+          <div class="plan-cell"><div class="k">Entry</div><div class="v" style="font-size:14px">${fmtPrice(t.entry)}</div></div>
+          <div class="plan-cell stop"><div class="k">Stop</div><div class="v" style="font-size:14px">${fmtPrice(t.stop)}</div></div>
+          <div class="plan-cell target"><div class="k">TP1</div><div class="v" style="font-size:14px">${fmtPrice(t.tp1)}</div></div>
+          <div class="plan-cell target"><div class="k">TP2</div><div class="v" style="font-size:14px">${fmtPrice(t.target)}</div></div>
+          <div class="plan-cell"><div class="k">Qty</div><div class="v" style="font-size:14px">${n2(t.shares, 0)}</div></div>
+          <div class="plan-cell"><div class="k">At risk</div><div class="v" style="font-size:14px">${money(t.riskCash)}</div></div>
+        </div>` : `<div class="hint" style="padding:2px 2px 0">No side clears the gate. Best available is ${(Math.max(a.probs.long.win, a.probs.short.win) * 100).toFixed(1)}% against a ${(threshold() * 100).toFixed(0)}% requirement${t ? '' : ''}.</div>`}
+
+        <div class="tv-broker">
+          <button class="btn primary sm" id="rhOpen" ${t ? '' : 'disabled'}>Open in Robinhood</button>
+          <button class="btn sm" id="rhCopy" ${t ? '' : 'disabled'}>Copy ticket</button>
+          <button class="btn sm" id="rhLog" ${t ? '' : 'disabled'}>Log fill</button>
+        </div>
+        <div class="hint" id="rhHint" style="margin:0 0 2px"></div>
+
+        <div class="tv-block">
+          <div class="label-xs" style="margin-bottom:7px">Why</div>
           <div class="bars">
-            ${a.drivers.length ? a.drivers.map((d) => `
-              <div class="bar-row" style="grid-template-columns:1fr 84px 46px">
-                <span class="mut">${esc(d.label)}</span>
-                <span class="bar-track"><i class="bar-fill ${d.push >= 0 ? 'pos' : 'neg'}" style="width:${clamp(Math.abs(d.push) / 0.6, 0, 1) * 50}%"></i></span>
-                <span class="mono ${d.push >= 0 ? 'pos' : 'neg'}" style="text-align:right">${d.push >= 0 ? '+' : ''}${d.push.toFixed(2)}</span>
-              </div>`).join('') : '<span class="hint">No single feature dominates.</span>'}
+            ${a.drivers.slice(0, 5).map((d) => `<div class="bar-row" style="grid-template-columns:1fr 66px 40px">
+              <span class="mut" style="font-size:11px">${esc(d.label)}</span>
+              <span class="bar-track"><i class="bar-fill ${d.push >= 0 ? 'pos' : 'neg'}" style="width:${clamp(Math.abs(d.push) / 0.6, 0, 1) * 50}%"></i></span>
+              <span class="mono ${d.push >= 0 ? 'pos' : 'neg'}" style="text-align:right;font-size:10px">${d.push >= 0 ? '+' : ''}${d.push.toFixed(2)}</span>
+            </div>`).join('')}
           </div>
-          <div class="hint" style="margin-top:10px">Bars show each standardised feature's contribution to the ${side === 'flat' ? 'best' : side} probability. This is a linear model, so those contributions add up exactly.</div>
-        </section>
-
-        <section class="card card-pad">
-          <h3 style="margin-bottom:10px">Context</h3>
-          <div class="bars">
-            ${meterRow('Trend structure', a.context.trend, 'var(--long)')}
-            ${meterRow('Momentum', a.context.momentum, 'var(--accent)')}
-            ${meterRow('Volume support', a.context.volume, 'var(--warn)')}
-            ${meterRow('Market backdrop', a.context.market, 'var(--accent)')}
-          </div>
-          <div class="plan-grid" style="margin-top:12px;grid-template-columns:repeat(3,1fr)">
-            <div class="plan-cell"><div class="k">RSI 14</div><div class="v" style="font-size:14px">${isNum(a.context.rsi) ? a.context.rsi.toFixed(1) : '—'}</div><div class="s">${esc(a.context.label)}</div></div>
-            <div class="plan-cell"><div class="k">ADX</div><div class="v" style="font-size:14px">${isNum(a.context.adx) ? a.context.adx.toFixed(1) : '—'}</div><div class="s">${a.context.adx > 25 ? 'trending' : a.context.adx > 15 ? 'weak trend' : 'no trend'}</div></div>
-            <div class="plan-cell"><div class="k">VIX</div><div class="v" style="font-size:14px">${isNum(a.context.vix) ? a.context.vix.toFixed(1) : '—'}</div><div class="s">${esc(a.context.volatilityBand)} vol</div></div>
-          </div>
-        </section>
-      </div>
-    </div>
-
-    <div class="row cols-3" style="margin-bottom:14px">
-      <section class="card card-pad">
-        <h3 style="margin-bottom:10px">Key levels</h3>
-        <div class="stack" style="gap:6px;font-size:12.5px">
-          <div class="flex"><span class="dim" style="flex:1">Resistance</span><span class="mono">${a.levels.resistances.map((x) => fmtPrice(x)).join(' · ') || '—'}</span></div>
-          <div class="flex"><span class="dim" style="flex:1">Support</span><span class="mono">${a.levels.supports.map((x) => fmtPrice(x)).join(' · ') || '—'}</span></div>
-          <div class="flex"><span class="dim" style="flex:1">52-week high</span><span class="mono">${fmtPrice(a.levels.high52)}</span></div>
-          <div class="flex"><span class="dim" style="flex:1">52-week low</span><span class="mono">${fmtPrice(a.levels.low52)}</span></div>
-          <div class="flex"><span class="dim" style="flex:1">EMA 50 / 200</span><span class="mono">${fmtPrice(a.context.ema50)} / ${fmtPrice(a.context.ema200)}</span></div>
         </div>
-      </section>
 
-      <section class="card card-pad">
-        <h3 style="margin-bottom:10px">Risk flags</h3>
-        <div class="stack" style="gap:8px">
-          ${a.flags.length ? a.flags.map((f) => `<div class="flex" style="align-items:flex-start;gap:8px"><span class="badge ${f.level === 'high' ? 'short' : f.level === 'med' ? 'warn' : 'muted'}" style="flex:none">${esc(f.level)}</span><span class="hint">${esc(f.text)}</span></div>`).join('') : '<span class="hint">Nothing unusual in volatility, liquidity or structure.</span>'}
+        <div class="tv-block">
+          <div class="label-xs" style="margin-bottom:7px">Risk</div>
+          ${a.flags.slice(0, 3).map((f) => `<div class="flex" style="align-items:flex-start;gap:6px;margin-bottom:6px"><span class="badge ${f.level === 'high' ? 'short' : f.level === 'med' ? 'warn' : 'muted'}" style="flex:none;font-size:9px">${esc(f.level)}</span><span class="hint" style="font-size:11px">${esc(f.text)}</span></div>`).join('') || '<span class="hint" style="font-size:11px">Nothing unusual in volatility or structure.</span>'}
         </div>
-      </section>
 
-      <section class="card card-pad">
-        <h3 style="margin-bottom:6px">Out-of-sample replay</h3>
-        <p class="hint" style="margin-bottom:10px">This instrument, traded by the walk-forward model (each year judged only by weights fit before it).</p>
-        ${replay.metrics.trades ? `
-          <div class="plan-grid" style="grid-template-columns:repeat(2,1fr)">
-            <div class="plan-cell"><div class="k">Trades</div><div class="v" style="font-size:15px">${replay.metrics.trades}</div></div>
-            <div class="plan-cell"><div class="k">Hit rate</div><div class="v" style="font-size:15px">${(replay.metrics.winRate * 100).toFixed(0)}%</div></div>
-            <div class="plan-cell"><div class="k">Expectancy</div><div class="v ${signCls(replay.metrics.expectancyR)}" style="font-size:15px">${rmult(replay.metrics.expectancyR)}</div></div>
-            <div class="plan-cell"><div class="k">Total</div><div class="v ${signCls(replay.metrics.totalR)}" style="font-size:15px">${replay.metrics.totalR.toFixed(1)}R</div></div>
-          </div>
-          <div class="hint" style="margin-top:8px">${replay.metrics.trades < 25 ? 'Small sample — treat these numbers as an anecdote, not evidence.' : 'Sample is large enough to be suggestive, not conclusive.'}</div>
-        ` : `<div class="hint">No qualifying signals on this instrument in the evaluation years.</div>`}
-      </section>
+        <div class="tv-block">
+          <div class="flex" style="margin-bottom:6px"><span class="label-xs">Journal</span><span class="spacer"></span><span class="mono dim" style="font-size:10.5px">${open.length} open</span></div>
+          <div id="tvJournal"></div>
+        </div>
+
+        <div class="hint" style="font-size:10px;margin-top:auto">${esc(DISCLAIMER)}</div>
+      </aside>
     </div>
-
-    <section class="card">
-      <div class="card-head"><h2>News for ${esc(a.symbol)}</h2><span class="card-sub" id="newsMeta">live</span></div>
-      <div class="news-list" id="tickerNews"><div class="news-item"><div class="skeleton" style="height:12px;width:90%"></div></div></div>
-    </section>
-
-    <div class="hint" style="margin:14px 2px 0">${esc(DISCLAIMER)}</div>
   `;
 
-  drawPriceChart(symbol, bars, a);
-  $$('#tfSeg button').forEach((b) => b.addEventListener('click', () => {
-    $$('#tfSeg button').forEach((x) => x.classList.toggle('on', x === b));
-    drawPriceChart(symbol, bars, a, b.dataset.tf);
-  }));
-  loadTickerNews(a.symbol, a.name);
-}
+  /* ------------------------------- chart ---------------------------------- */
+  const chartHost = $('#chartHost');
+  const levelColor = (k) => (k === 'stop' ? 'var(--short)' : k === 'entry' ? 'var(--muted)' : 'var(--long)');
+  const levels = t ? [
+    { price: t.entry, color: levelColor('entry'), label: `ENTRY ${fmtPrice(t.entry)}`, dash: [3, 3] },
+    { price: t.stop, color: levelColor('stop'), label: `STOP ${fmtPrice(t.stop)}` },
+    { price: t.tp1, color: levelColor('tp'), label: `TP1 ${fmtPrice(t.tp1)}`, dash: [4, 4] },
+    { price: t.target, color: levelColor('tp'), label: `TP2 ${fmtPrice(t.target)}` },
+  ] : [];
 
-function drawPriceChart(symbol, bars, a, timeframe = '1Y') {
-  const spans = { '3M': 63, '6M': 126, '1Y': 252, '2Y': 504, '5Y': 1260, '10Y': 100000 };
-  const n = spans[timeframe] || 252;
-  const start = Math.max(0, bars.c.length - n);
-  const slice = {
-    date: bars.date.slice(start), o: bars.o.slice(start), h: bars.h.slice(start),
-    l: bars.l.slice(start), c: bars.c.slice(start), v: bars.v.slice(start),
+  const last = { o: bars.o.at(-1), h: bars.h.at(-1), l: bars.l.at(-1), c: bars.c.at(-1) };
+  const legend = (d) => {
+    const el = $('#tvOhlc');
+    if (!el) return;
+    if (!d) {
+      el.innerHTML = `<span class="dim">O</span> <b>${fmtPrice(last.o)}</b> &nbsp;<span class="dim">H</span> <b>${fmtPrice(last.h)}</b> &nbsp;<span class="dim">L</span> <b>${fmtPrice(last.l)}</b> &nbsp;<span class="dim">C</span> <b>${fmtPrice(last.c)}</b>`;
+      return;
+    }
+    const up = d.c >= d.o;
+    el.innerHTML = `<span class="${up ? 'pos' : 'neg'}">O ${fmtPrice(d.o)} &nbsp;H ${fmtPrice(d.h)} &nbsp;L ${fmtPrice(d.l)} &nbsp;C ${fmtPrice(d.c)}</span> &nbsp;<span class="dim">${esc(d.date)}</span>${isNum(d.v) && d.v ? ` &nbsp;<span class="dim">Vol ${n2(d.v / 1e6, 2)}M</span>` : ''}`;
   };
-  const e50 = ema(bars.c, 50).slice(start);
-  const e200 = ema(bars.c, 200).slice(start);
-  const box = $('#priceChart');
-  if (!box) return;
-  box.innerHTML = '';
-  const levels = [];
-  // Only draw trade levels if they are inside the visible price window
-  if (a.trade) {
-    const lo = Math.min(...slice.l), hi = Math.max(...slice.h);
-    const inside = (p) => p >= lo * 0.9 && p <= hi * 1.1;
-    if (inside(a.trade.stop)) levels.push({ price: a.trade.stop, color: 'var(--short)', label: `STOP ${fmtPrice(a.trade.stop)}` });
-    if (inside(a.trade.target)) levels.push({ price: a.trade.target, color: 'var(--long)', label: `TARGET ${fmtPrice(a.trade.target)}` });
-    if (inside(a.trade.entry)) levels.push({ price: a.trade.entry, color: 'var(--muted)', label: `ENTRY ${fmtPrice(a.trade.entry)}`, dash: [2, 3] });
-  }
-  levels.push({ price: a.levels.high52, color: 'var(--warn)', label: '52w high', dash: [1, 4] });
-  levels.push({ price: a.levels.low52, color: 'var(--warn)', label: '52w low', dash: [1, 4] });
-  new CandleChart(box, {
-    height: 330,
-    overlays: [
-      { name: 'ema50', values: e50, color: '#5aa9ff', width: 1.3 },
-      { name: 'ema200', values: e200, color: '#ffb84d', width: 1.3 },
-    ],
-    levels,
-  }).setData(slice);
-}
 
-async function loadTickerNews(symbol, name) {
-  const box = $('#tickerNews'), meta = $('#newsMeta');
-  if (!box) return;
-  if (!S.news) { box.innerHTML = `<div class="empty">News module unavailable.</div>`; return; }
-  try {
-    const r = await S.news.fetchNews({ symbol, companyName: name, timespan: '2w', limit: 8 });
-    if (!r.ok) throw new Error(r.error || 'failed');
-    if (meta) meta.textContent = `${r.items.length} stories · ${r.items[0]?.domain || ''}`;
-    box.innerHTML = r.items.length ? r.items.map((it) => `
-      <div class="news-item">
-        <span class="src" title="${esc(it.domain)}">${esc(it.source || it.domain)}</span>
-        <div style="min-width:0">
-          <a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a>
-          <div class="t">${esc((it.published || '').replace('T', ' ').slice(0, 16))} · ${esc(it.country || '')}</div>
-        </div>
-      </div>`).join('') : `<div class="empty">No recent stories matched this ticker.</div>`;
-  } catch (e) {
-    box.innerHTML = `<div class="empty">Could not load news: ${esc(e.message)}</div>`;
+  const chart = new ProChart(chartHost, {
+    interval: prefs.interval, type: prefs.type, range: prefs.range,
+    overlays: prefs.overlays, panes: prefs.panes,
+    onCrosshair: legend,
+    onDrawingsChange: (list) => saveDrawings(symbol, list),
+    onToolChange: (tool) => $$('#tvTools .tv-tool[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool)),
+  });
+  window.__chart = chart;   // handy for debugging in the console
+  chart.setData({ symbol, bars })
+    .setOverlays(prefs.overlays)
+    .setPanes(prefs.panes)
+    .setModelLevels(levels)
+    .setDrawings(loadDrawings(symbol))
+    .setTool(prefs.tool || 'cursor');
+  legend(null);
+
+  /* toolbar wiring */
+  $$('#tvIv button').forEach((b) => b.addEventListener('click', () => {
+    $$('#tvIv button').forEach((x) => x.classList.toggle('on', x === b));
+    chart.setInterval(b.dataset.iv); setChartPrefs({ interval: b.dataset.iv }); legend(null); updateStatus();
+  }));
+  $$('#tvRg button').forEach((b) => b.addEventListener('click', () => {
+    $$('#tvRg button').forEach((x) => x.classList.toggle('on', x === b));
+    chart.setRange(b.dataset.rg); setChartPrefs({ range: b.dataset.rg }); updateStatus();
+  }));
+  $$('#tvType button').forEach((b) => b.addEventListener('click', () => {
+    $$('#tvType button').forEach((x) => x.classList.toggle('on', x === b));
+    chart.setType(b.dataset.type); setChartPrefs({ type: b.dataset.type });
+  }));
+  $$('#tvTools .tv-tool[data-tool]').forEach((b) => b.addEventListener('click', () => {
+    $$('#tvTools .tv-tool[data-tool]').forEach((x) => x.classList.toggle('on', x === b));
+    chart.setTool(b.dataset.tool); setChartPrefs({ tool: b.dataset.tool });
+  }));
+  $('#tvUndo').addEventListener('click', () => { chart.undoDrawing(); saveDrawings(symbol, chart.getDrawings()); });
+  $('#tvClear').addEventListener('click', () => { chart.clearDrawings(); saveDrawings(symbol, []); });
+  $$('#tvInd .chip').forEach((b) => b.addEventListener('click', () => {
+    const key = b.dataset.ind;
+    const isOverlay = ['ema20', 'ema50', 'ema200', 'bb'].includes(key);
+    const cur = chartPrefs();
+    const list = isOverlay ? [...cur.overlays] : [...cur.panes];
+    const i = list.indexOf(key);
+    if (i >= 0) list.splice(i, 1); else list.push(key);
+    b.classList.toggle('on', list.includes(key));
+    if (isOverlay) { chart.setOverlays(list); setChartPrefs({ overlays: list }); }
+    else { chart.setPanes(list); setChartPrefs({ panes: list }); }
+    updateStatus();
+  }));
+
+  function updateStatus() {
+    const el = $('#tvStatus');
+    if (!el) return;
+    const p = chartPrefs();
+    el.textContent = `${chart.bars.c.length} bars · ${p.interval} · ${p.range}` + (S.liveState?.robinhood ? ' · Robinhood live' : ' · snapshot');
+  }
+  updateStatus();
+
+  /* ----------------------------- watchlist -------------------------------- */
+  const renderList = (filter = '') => {
+    const box = $('#tvList');
+    if (!box) return;
+    const q = filter.trim().toLowerCase();
+    const all = S.signals
+      .filter((x) => !q || `${x.symbol} ${x.name}`.toLowerCase().includes(q))
+      .sort((x, y) => x.rank - y.rank);
+    const me = all.find((x) => x.symbol === symbol);
+    const rows = [...(me ? [me] : []), ...all.filter((x) => x.symbol !== symbol)].slice(0, 80);
+    box.innerHTML = rows.map((x) => {
+      const live = S.rhQuotes?.[x.symbol];
+      const price = live?.last ?? x.price;
+      const chg = live?.changePct ?? x.change;
+      return `<button class="tv-row ${x.symbol === symbol ? 'active' : ''}" data-sym="${esc(x.symbol)}">
+        <span class="tv-row-sym">${esc(x.symbol)}</span>
+        <span class="tv-row-px mono">${fmtPrice(price)}</span>
+        <span class="tv-row-chg mono ${signCls(chg)}">${pctRaw(chg)}</span>
+        <i class="tv-dot ${x.side === 'long' ? 'long' : x.side === 'short' ? 'short' : ''}"></i>
+      </button>`;
+    }).join('') || `<div class="empty" style="padding:20px">No matches</div>`;
+    $$('#tvList .tv-row').forEach((b) => b.addEventListener('click', () => { location.hash = `#/analyze/${b.dataset.sym}`; }));
+  };
+  renderList();
+  $('#tvFilter').addEventListener('input', (e) => renderList(e.target.value));
+
+  /* ------------------------------- broker --------------------------------- */
+  const rhHint = $('#rhHint');
+  const setHint = (msg) => { if (rhHint) rhHint.textContent = msg; };
+
+  $('#rhOpen').addEventListener('click', () => {
+    const url = live.robinhoodLink(symbol);
+    window.open(url, '_blank', 'noopener');
+    setHint('Opened Robinhood. Place the order there — AlphaDesk never touches your account.');
+  });
+  $('#rhCopy').addEventListener('click', async () => {
+    const ok = await copyText(orderTicket(a, inst));
+    toast(ok ? 'Order ticket copied' : 'Could not copy', ok ? 'ok' : 'err');
+    if (ok) setHint('Ticket copied — paste it into Robinhood or your notes.');
+  });
+  $('#rhLog').addEventListener('click', () => {
+    if (!t) return;
+    openModal('Log a fill', `
+      <p class="hint" style="margin-bottom:10px">Records what you actually filled, so the journal reflects your account rather than the model's suggestion.</p>
+      <div class="row cols-2" style="gap:10px">
+        <label class="field"><span>Side</span><select id="jSide"><option value="long" ${t.side === 'long' ? 'selected' : ''}>Long</option><option value="short" ${t.side === 'short' ? 'selected' : ''}>Short</option></select></label>
+        <label class="field"><span>Quantity</span><input type="number" id="jQty" value="${t.shares}" min="0" step="1" /></label>
+        <label class="field"><span>Entry price</span><input type="number" id="jEntry" value="${t.entry}" step="any" /></label>
+        <label class="field"><span>Stop</span><input type="number" id="jStop" value="${t.stop}" step="any" /></label>
+        <label class="field"><span>Target</span><input type="number" id="jTarget" value="${t.target}" step="any" /></label>
+        <label class="field"><span>Date</span><input type="date" id="jDate" value="${a.asOf}" /></label>
+      </div>
+      <div class="flex" style="margin-top:12px;justify-content:flex-end"><button class="btn primary" id="jSave">Save to journal</button></div>
+    `, (wrap, close) => {
+      wrap.querySelector('#jSave').addEventListener('click', async () => {
+        const payload = {
+          symbol, side: wrap.querySelector('#jSide').value,
+          qty: +wrap.querySelector('#jQty').value, entry: +wrap.querySelector('#jEntry').value,
+          stop: +wrap.querySelector('#jStop').value, target: +wrap.querySelector('#jTarget').value,
+          openedAt: wrap.querySelector('#jDate').value,
+        };
+        let entry = { ...payload, id: `${Date.now()}`, status: 'open', openedAt: payload.openedAt };
+        if (S.user) {
+          try {
+            const r = await auth.addFill(payload, apiBase());
+            if (r.fill) entry = r.fill;
+          } catch (e) { toast(`Saved locally — server said: ${e.message}`, 'err'); }
+        }
+        const list = journalAll(); list.push(entry); journalSave(list);
+        close(); renderJournal(); toast(S.user ? 'Fill saved to your account' : 'Fill logged locally', 'ok');
+      });
+    });
+  });
+
+  function renderJournal() {
+    const box = $('#tvJournal');
+    if (!box) return;
+    const open = journalAll().filter((j) => j.status === 'open');
+    if (!open.length) {
+      box.innerHTML = `<div class="hint" style="font-size:11px">No open fills. Log one after you execute in Robinhood and the desk will track it here.</div>`;
+      return;
+    }
+    box.innerHTML = open.slice(-6).reverse().map((j) => {
+      const px = S.rhQuotes?.[j.symbol]?.last ?? S.signalBy.get(j.symbol)?.price ?? j.entry;
+      const r = j.side === 'long' ? (px - j.entry) / Math.max(1e-9, j.entry - j.stop) : (j.entry - px) / Math.max(1e-9, j.stop - j.entry);
+      return `<div class="flex" style="font-size:11.5px;padding:3px 0">
+        <span class="mono" style="width:62px">${esc(j.symbol)}</span>
+        <span class="dim" style="width:38px">${esc(j.side)}</span>
+        <span class="mono" style="flex:1">${n2(j.qty, 0)} @ ${fmtPrice(j.entry)}</span>
+        <span class="mono ${signCls(r)}">${rmult(r)}</span>
+      </div>`;
+    }).join('');
+  }
+  renderJournal();
+
+  /* ------------------------- live quotes (optional) ----------------------- */
+  if (S.settings.liveRh) {
+    live.rhQuotes([symbol, ...S.signals.slice(0, 24).map((x) => x.symbol)], S.settings.bridgeUrl)
+      .then((q) => {
+        S.rhQuotes = { ...(S.rhQuotes || {}), ...q };
+        if (q[symbol]?.last) {
+          const el = $('#tvLast'); if (el) el.textContent = fmtPrice(q[symbol].last);
+          const ch = $('#tvChg'); if (ch) { ch.textContent = pctRaw(q[symbol].changePct); ch.className = `mono ${signCls(q[symbol].changePct)}`; }
+          const src = $('#tvSrc'); if (src) src.textContent = 'Robinhood live';
+          renderList($('#tvFilter')?.value || '');
+          renderJournal();
+        }
+        S.liveState = { ...(S.liveState || {}), robinhood: true };
+        updateStatus();
+      })
+      .catch((e) => { setHint(`Live quotes unavailable: ${e.message}`); });
+  } else {
+    setHint('Connect the Robinhood bridge in Settings for live quotes. Orders always execute in the Robinhood app.');
   }
 }
 
@@ -1144,6 +1309,33 @@ function viewSettings() {
       </section>
 
       <section class="card card-pad">
+        <h2 style="margin-bottom:8px">Robinhood <span class="badge muted">local bridge</span></h2>
+        <p class="hint" style="margin-bottom:8px">Robinhood has no public API, and their legacy login endpoint now returns <code>404</code>. AlphaDesk will not ask for your password or MFA code, and nothing here can place an order. What it can do is read Robinhood's public market data — quotes, daily history, market hours — through a bridge that runs on <em>your</em> machine.</p>
+        <pre class="mono hint" style="white-space:pre-wrap;margin:0 0 10px;padding:8px 10px;background:var(--panel-2);border-radius:8px;border:1px solid var(--line)">node tools/robinhood-bridge.mjs</pre>
+        <label class="field"><span>Bridge URL</span><input type="text" id="setBridge" value="${esc(s.bridgeUrl || 'http://127.0.0.1:8788')}" spellcheck="false" /></label>
+        <div class="flex" style="margin-top:10px;gap:8px;flex-wrap:wrap">
+          <button class="btn primary" id="rhConnect">Connect</button>
+          <button class="btn ghost" id="rhDisconnect">Disconnect</button>
+          <span class="hint" id="rhState" style="margin:0">not checked</span>
+        </div>
+        <label class="flex" style="margin-top:12px;gap:8px;align-items:center">
+          <input type="checkbox" id="rhLive" ${s.liveRh ? 'checked' : ''} style="width:auto" />
+          <span class="hint" style="margin:0">Use live Robinhood quotes and history in the terminal and watchlist</span>
+        </label>
+        <div class="hint" style="margin-top:10px">Order flow stays manual: the terminal's <b>Open in Robinhood</b> button deep-links to the instrument and <b>Copy ticket</b> gives you the exact quantity, limit, stop and targets to enter there.</div>
+      </section>
+
+      <section class="card card-pad">
+        <h2 style="margin-bottom:12px">Trade journal</h2>
+        <div class="flex" style="gap:8px;flex-wrap:wrap">
+          <button class="btn sm" id="jExport">Export CSV</button>
+          <button class="btn sm ghost" id="jClear">Clear journal</button>
+          <span class="hint" id="jState" style="margin:0"></span>
+        </div>
+        <p class="hint" style="margin-top:10px">Fills you log from the terminal are stored in this browser only. The journal tracks R multiple against your entry and stop using the latest price the app knows.</p>
+      </section>
+
+      <section class="card card-pad">
         <h2 style="margin-bottom:12px">Appearance &amp; data</h2>
         <div class="flex" style="margin-bottom:12px">
           <span class="hint" style="flex:1;margin:0">Theme</span>
@@ -1194,17 +1386,251 @@ node tools/publish-data.mjs    # regenerate site data</pre>
     if (S.vision?.setAIConfig) S.vision.setAIConfig({ provider: S.settings.aiProvider, apiKey: S.settings.aiKey, model: S.settings.aiModel || undefined });
     toast('Scanner key saved', 'ok');
   });
+  const setRhState = (txt, kind) => {
+    const el = $('#rhState');
+    if (!el) return;
+    el.innerHTML = `<span class="${kind === 'ok' ? 'pos' : kind === 'err' ? 'neg' : 'dim'}">${esc(txt)}</span>`;
+  };
+  const saveJournalState = () => {
+    const j = journalAll();
+    const el = $('#jState');
+    if (el) el.textContent = `${j.length} fills · ${j.filter((x) => x.status === 'open').length} open`;
+  };
+  saveJournalState();
+
+  $('#rhConnect').addEventListener('click', async () => {
+    const url = $('#setBridge').value.trim() || 'http://127.0.0.1:8788';
+    S.settings.bridgeUrl = url; saveSettings();
+    setRhState('checking…', 'dim');
+    try {
+      const h = await live.bridgeHealth(url);
+      setRhState(`connected · ${h.service} · ${h.capabilities.join(', ')}`, 'ok');
+      toast('Robinhood bridge connected', 'ok');
+    } catch (e) {
+      setRhState(e.message, 'err');
+    }
+  });
+  $('#rhDisconnect').addEventListener('click', () => {
+    S.settings.liveRh = false; saveSettings();
+    const cb = $('#rhLive'); if (cb) cb.checked = false;
+    setRhState('disconnected', 'dim');
+  });
+  $('#rhLive').addEventListener('change', (e) => {
+    S.settings.liveRh = e.target.checked; saveSettings();
+    if (e.target.checked) { S.rhQuotes = {}; toast('Live Robinhood quotes enabled', 'ok'); }
+  });
+  $('#jExport').addEventListener('click', async () => {
+    const j = journalAll();
+    if (!j.length) { toast('Journal is empty', 'err'); return; }
+    const cols = ['symbol', 'side', 'qty', 'entry', 'stop', 'target', 'openedAt', 'status'];
+    const csv = [cols.join(',')].concat(j.map((r) => cols.map((c) => r[c] ?? '').join(','))).join('\n');
+    const ok = await copyText(csv);
+    toast(ok ? 'Journal CSV copied to clipboard' : 'Copy failed', ok ? 'ok' : 'err');
+  });
+  $('#jClear').addEventListener('click', () => { journalSave([]); saveJournalState(); toast('Journal cleared'); });
+
   $$('#themeSeg button').forEach((b) => b.addEventListener('click', () => {
     S.settings.theme = b.dataset.theme; saveSettings(); applyTheme();
     $$('#themeSeg button').forEach((x) => x.classList.toggle('on', x === b));
   }));
 }
 
+/* ------------------------------- accounts ---------------------------------- */
+/* Server-backed accounts and journal. Everything degrades to guest mode when
+   the API is not running: the app still works, the journal just stays local.   */
+
+const apiBase = () => S.settings.apiBase || auth.DEFAULT_API;
+
+function renderAcct() {
+  const chip = $('#acctChip');
+  if (!chip) return;
+  if (S.user) {
+    chip.classList.add('signed');
+    chip.innerHTML = `<button class="acct-btn" id="acctBtn" title="Signed in as ${esc(S.user.email)}"><span class="acct-dot"></span><span class="acct-label">${esc(S.user.email.split('@')[0])}</span></button>`;
+  } else {
+    chip.classList.remove('signed');
+    chip.innerHTML = `<button class="acct-btn" id="acctBtn" title="Sign in or create an account"><span class="acct-dot"></span><span class="acct-label">Sign in</span></button>`;
+  }
+  $('#acctBtn').addEventListener('click', () => (S.user ? openAccountMenu() : openAuthModal('login')));
+  updateApiStatus();
+}
+
+function openAccountMenu() {
+  openModal('Account', `
+    <div class="stack" style="gap:12px">
+      <div class="flex"><span class="label-xs">Signed in</span><span class="spacer"></span><span class="mono" style="font-size:12px">${esc(S.user.email)}</span></div>
+      <div class="hint">Your journal is stored on the API server and mirrored in this browser. Sessions are HttpOnly cookies; the page never sees your password.</div>
+      <div class="flex" style="gap:8px;flex-wrap:wrap">
+        <button class="btn sm" id="amPw">Change password</button>
+        <button class="btn sm ghost" id="amOut">Sign out</button>
+      </div>
+      <div class="hint" id="amMsg" style="margin:0"></div>
+    </div>`, (wrap, close) => {
+    wrap.querySelector('#amOut').addEventListener('click', async () => {
+      try { await auth.logout(apiBase()); } catch { /* already gone */ }
+      S.user = null; renderAcct(); close(); toast('Signed out');
+    });
+    wrap.querySelector('#amPw').addEventListener('click', () => { close(); openPasswordModal(); });
+  });
+}
+
+function openPasswordModal() {
+  openModal('Change password', `
+    <div class="stack" style="gap:10px">
+      <label class="field"><span>Current password</span><input type="password" id="pwCur" autocomplete="current-password" /></label>
+      <label class="field"><span>New password (10+ characters)</span><input type="password" id="pwNew" autocomplete="new-password" /></label>
+      <div class="pw-meter"><i id="pwBar"></i></div>
+      <div class="auth-err" id="pwErr"></div>
+      <div class="flex" style="justify-content:flex-end"><button class="btn primary" id="pwSave">Update password</button></div>
+    </div>`, (wrap, close) => {
+    const bar = wrap.querySelector('#pwBar');
+    wrap.querySelector('#pwNew').addEventListener('input', (e) => {
+      const v = e.target.value;
+      const score = Math.min(4, (v.length >= 10 ? 1 : 0) + (v.length >= 14 ? 1 : 0) + (/[^a-zA-Z0-9]/.test(v) ? 1 : 0) + (/[A-Z]/.test(v) && /[0-9]/.test(v) ? 1 : 0));
+      bar.style.width = `${score * 25}%`;
+      bar.style.background = score <= 1 ? 'var(--short)' : score === 2 ? 'var(--warn)' : 'var(--long)';
+    });
+    wrap.querySelector('#pwSave').addEventListener('click', async () => {
+      const err = wrap.querySelector('#pwErr');
+      try {
+        await auth.changePassword(wrap.querySelector('#pwCur').value, wrap.querySelector('#pwNew').value, apiBase());
+        S.user = null; renderAcct(); close(); toast('Password changed — sign in again', 'ok');
+      } catch (e) { err.textContent = e.message; }
+    });
+  });
+}
+
+function openAuthModal(mode = 'login') {
+  let tab = mode;
+  const body = () => `
+    <div class="auth-tabs">
+      <button data-tab="login" class="${tab === 'login' ? 'on' : ''}">Sign in</button>
+      <button data-tab="register" class="${tab === 'register' ? 'on' : ''}">Create account</button>
+    </div>
+    <div class="stack" style="gap:10px">
+      <label class="field"><span>Email</span><input type="email" id="auEmail" autocomplete="email" placeholder="you@example.com" /></label>
+      <label class="field"><span>Password${tab === 'register' ? ' (10+ characters)' : ''}</span><input type="password" id="auPw" autocomplete="${tab === 'register' ? 'new-password' : 'current-password'}" /></label>
+      ${tab === 'register' ? '<div class="pw-meter"><i id="auBar"></i></div>' : ''}
+      <div class="auth-err" id="auErr"></div>
+      <div class="flex" style="justify-content:space-between;gap:8px">
+        <span class="hint" style="margin:0">${esc(apiBase().replace(/^https?:\/\//, ''))}</span>
+        <button class="btn primary" id="auGo">${tab === 'login' ? 'Sign in' : 'Create account'}</button>
+      </div>
+      <div class="hint" style="margin:0">Passwords are hashed with scrypt on the server and never stored or sent back. Sessions use HttpOnly cookies. AlphaDesk cannot see your brokerage credentials — it never asks for them.</div>
+    </div>`;
+  const m = openModal('Account', body(), (wrap, close) => {
+    const wire = () => {
+      $$('.auth-tabs button', wrap).forEach((b) => b.addEventListener('click', () => {
+        tab = b.dataset.tab;
+        wrap.querySelector('.modal-body').innerHTML = body();
+        wire();
+        const bar = wrap.querySelector('#auBar');
+        if (bar) wrap.querySelector('#auPw').addEventListener('input', (e) => {
+          const v = e.target.value;
+          const score = Math.min(4, (v.length >= 10 ? 1 : 0) + (v.length >= 14 ? 1 : 0) + (/[^a-zA-Z0-9]/.test(v) ? 1 : 0) + (/[A-Z]/.test(v) && /[0-9]/.test(v) ? 1 : 0));
+          bar.style.width = `${score * 25}%`;
+          bar.style.background = score <= 1 ? 'var(--short)' : score === 2 ? 'var(--warn)' : 'var(--long)';
+        });
+      }));
+      wrap.querySelector('#auGo').addEventListener('click', async () => {
+        const err = wrap.querySelector('#auErr');
+        const email = wrap.querySelector('#auEmail').value.trim();
+        const pw = wrap.querySelector('#auPw').value;
+        err.textContent = '';
+        const btn = wrap.querySelector('#auGo');
+        btn.disabled = true; btn.textContent = 'Working…';
+        try {
+          const r = tab === 'login' ? await auth.login(email, pw, apiBase()) : await auth.register(email, pw, apiBase());
+          S.user = r.user; S.apiOnline = true;
+          renderAcct();
+          await syncJournal();
+          close(); toast(tab === 'login' ? 'Signed in' : 'Account created', 'ok');
+          route();
+        } catch (e) {
+          err.textContent = e.message;
+          btn.disabled = false; btn.textContent = tab === 'login' ? 'Sign in' : 'Create account';
+        }
+      });
+    };
+    wire();
+  });
+  return m;
+}
+
+/** Pull server fills into the local mirror (and push unsynced local rows up). */
+async function syncJournal() {
+  if (!S.user) return;
+  try {
+    const r = await auth.syncJournal(journalAll(), apiBase());
+    journalSave(r.fills);
+  } catch (e) { console.warn('journal sync failed:', e.message); }
+}
+
+async function refreshAuth() {
+  renderAcct();
+  try {
+    const r = await auth.me(apiBase());
+    S.user = r.user || null;
+    S.apiOnline = true;
+    if (S.user) await syncJournal();
+  } catch {
+    S.user = null;
+    S.apiOnline = false;
+  }
+  renderAcct();
+}
+
+function updateApiStatus() {
+  const el = $('#sbApi');
+  if (!el) return;
+  if (S.apiOnline === true) { el.textContent = S.user ? `API · ${S.user.email.split('@')[0]}` : 'API · guest'; el.className = 'sb-item ok'; }
+  else if (S.apiOnline === false) { el.textContent = 'API offline · local mode'; el.className = 'sb-item off'; }
+  else { el.textContent = 'API …'; el.className = 'sb-item'; }
+}
+
+/* ------------------------------- status bar -------------------------------- */
+
+function marketState() {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  const mins = et.getHours() * 60 + et.getMinutes();
+  if (day === 0 || day === 6) return { state: 'closed', label: 'closed' };
+  if (mins >= 570 && mins < 960) return { state: 'open', label: 'open' };
+  if ((mins >= 240 && mins < 570) || (mins >= 960 && mins < 1200)) return { state: 'pre', label: 'extended' };
+  return { state: 'closed', label: 'closed' };
+}
+
+function updateStatusBar(symbol) {
+  const pill = $('#mktPill');
+  if (pill) {
+    const m = marketState();
+    pill.textContent = m.state === 'open' ? 'Market open' : m.state === 'pre' ? 'Extended' : 'Market closed';
+    pill.className = `mkt-pill ${m.state === 'open' ? 'open' : 'closed'}`;
+  }
+  const sym = $('#sbSym');
+  if (sym) sym.textContent = symbol ? `${symbol} · ${S.bySymbol.get(symbol)?.cls || ''}` : 'no symbol';
+  const data = $('#sbData');
+  if (data) data.textContent = $('#dataChip')?.textContent || '';
+  updateApiStatus();
+}
+
+function startClock() {
+  const tick = () => {
+    const el = $('#sbClock');
+    if (!el) return;
+    const m = marketState();
+    el.textContent = `${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} · ${m.label}`;
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
 /* ---------------------------------- router --------------------------------- */
 
 const ROUTES = {
   dashboard: () => viewDashboard(),
-  analyze: (arg) => viewAnalyze(arg),
+  analyze: (arg) => viewTerminal(arg),
+  chart: (arg) => viewTerminal(arg),
   scan: () => viewScan(),
   screener: () => viewScreener(),
   model: () => viewModel(),
@@ -1222,6 +1648,8 @@ async function route() {
   const sym = arg ? decodeURIComponent(arg.split('?')[0]).toUpperCase() : '';
   currentRoute = `${key}/${sym}`;
   $$('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.route === key));
+  $$('.quicknav a').forEach((a) => a.classList.toggle('active', (a.getAttribute('href') || '').includes(key)));
+  updateStatusBar(sym || (key === 'analyze' ? '' : undefined));
   $('#sidebar').classList.remove('open');
   window.scrollTo({ top: 0 });
   try {
@@ -1305,8 +1733,12 @@ function setRegimeMini() {
   const above50 = S.signals.filter((s) => isNum(s.ema50) && s.price > s.ema50).length / Math.max(1, S.signals.length);
   const r = regimeOf(spy, vix, above50);
   const el = $('#regimeMini');
+  if (!el) return;
   el.className = `regime-mini ${r.kind === 'long' ? 'risk-on' : r.kind === 'short' ? 'risk-off' : 'caution'}`;
-  el.querySelector('.regime-text').textContent = `${r.label} · VIX ${(vix?.price || 0).toFixed(1)}`;
+  const text = `${r.label} · VIX ${(vix?.price || 0).toFixed(1)}`;
+  const label = el.querySelector('.regime-text');
+  if (label) label.textContent = text;
+  el.title = text;
 }
 
 async function main() {
@@ -1327,7 +1759,11 @@ async function main() {
     return;
   }
 
-  $('#dataChip').textContent = `data ${S.model.training.dateRange[1]}`;
+  const newestBar = S.universe.map((u) => u.last).filter(Boolean).sort().at(-1);
+  $('#dataChip').textContent = `prices ${newestBar || S.model.training.dateRange[1]}`;
+  startClock();
+  await refreshAuth();
+  $('#dataChip').title = `Daily bars through ${newestBar || ''}. The model's newest labelled row is ${S.model.training.dateRange[1]} (labels need 15 forward bars).`;
   setRegimeMini();
   wireSearch();
   if (S.vision?.setAIConfig && S.settings.aiKey) {

@@ -26,7 +26,7 @@ function setupCanvas(canvas) {
 const fmtPrice = (v) => {
   if (!Number.isFinite(v)) return '—';
   const a = Math.abs(v);
-  if (a >= 1000) return v.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  if (a >= 1000) return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (a >= 100) return v.toFixed(2);
   if (a >= 1) return v.toFixed(2);
   if (a >= 0.01) return v.toFixed(4);
