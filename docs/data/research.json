@@ -1,0 +1,551 @@
+{
+ "updated": "2026-11-15",
+ "eras": [
+  {
+   "period": "2016",
+   "title": "Slow grind, two political shocks",
+   "summary": "A shaky start, a Brexit shock and a post-election rotation produced a 9.5% price gain for the S&P 500. The VIX closed at 28.14 in February during the China and oil selloff, the UK's June vote to leave the EU stalled the recovery, and the November election re-rated financials and small caps. The Fed raised rates once, in December, to 0.50-0.75%. Bitcoin more than doubled.",
+   "perf": {
+    "spx": "+9.5%",
+    "ndx": "+5.9%"
+   },
+   "events": [
+    {
+     "date": "2016-02-11",
+     "label": "Volatility peak",
+     "note": "VIX closes at 28.14, its highest close of the year, during the China/oil-driven risk-off. Source: FRED VIXCLS."
+    },
+    {
+     "date": "2016-06-23",
+     "label": "Brexit vote",
+     "note": "The UK votes to leave the EU; global equities sell off and the S&P 500's recovery stalls into the summer."
+    },
+    {
+     "date": "2016-11-08",
+     "label": "Trump elected",
+     "note": "Post-election rotation into financials and small caps; the S&P 500 ends the year near a record."
+    },
+    {
+     "date": "2016-12-14",
+     "label": "Fed hikes to 0.50-0.75%",
+     "note": "Only the second hike of the cycle; the upper bound ends 2016 at 0.75%. Source: FRED DFEDTARU."
+    }
+   ]
+  },
+  {
+   "period": "2017",
+   "title": "The low-volatility melt-up",
+   "summary": "Synchronised global growth, no inflation problem and US tax reform produced a near-frictionless year: the S&P 500 gained 19.4% and the Nasdaq-100 31.5%, its best year since 2009. The VIX averaged 11.09, the lowest annual average in the series' history back to 1990. The Fed hiked three times and the Tax Cuts and Jobs Act cut the corporate rate to 21%. Bitcoin gained 1,324%.",
+   "perf": {
+    "spx": "+19.4%",
+    "ndx": "+31.5%"
+   },
+   "events": [
+    {
+     "date": "2017-03-15",
+     "label": "First of three 2017 hikes",
+     "note": "Hikes in March, June and December take the target range to 1.25-1.50%. Source: FRED DFEDTARU."
+    },
+    {
+     "date": "2017-12-17",
+     "label": "Bitcoin's first cycle peak",
+     "note": "Intraday high near $19,650; CME bitcoin futures launch the same month, almost exactly at the top. Source: FRED CBBTCUSD (close basis)."
+    },
+    {
+     "date": "2017-12-22",
+     "label": "Tax Cuts and Jobs Act signed",
+     "note": "Corporate rate cut from 35% to 21%, driving the late-year acceleration in 2018 earnings expectations."
+    }
+   ]
+  },
+  {
+   "period": "2018",
+   "title": "Volmageddon, then a Q4 bear market",
+   "summary": "The VIX doubled in a single session on 5 February and destroyed the inverse-volatility ETN XIV. Equities recovered to a record in late August before a policy-driven fourth quarter took the S&P 500 down 19.8% from its 20 September high to the 24 December low. The Fed hiked four times to 2.25-2.50% and the US-China tariff conflict escalated. Bitcoin fell 73% for the year.",
+   "perf": {
+    "spx": "-6.2%",
+    "ndx": "-1.0%"
+   },
+   "events": [
+    {
+     "date": "2018-02-05",
+     "label": "VIX spikes to 37.32",
+     "note": "A one-day doubling from 17.31; short-volatility products collapse. Source: FRED VIXCLS."
+    },
+    {
+     "date": "2018-09-20",
+     "label": "S&P 500 peak before Q4",
+     "note": "2,930.75 close; the index then falls 19.8% to 2,351.10 on 2018-12-24. Source: FRED SP500."
+    },
+    {
+     "date": "2018-12-20",
+     "label": "Fourth 2018 hike",
+     "note": "Target range reaches 2.25-2.50% two days before the Christmas Eve low. Source: FRED DFEDTARU."
+    },
+    {
+     "date": "2018-12-15",
+     "label": "Bitcoin bottom",
+     "note": "$3,183 close, down 83.8% from the December 2017 peak. Source: FRED CBBTCUSD."
+    }
+   ]
+  },
+  {
+   "period": "2019",
+   "title": "The pivot and the repo spike",
+   "summary": "After the December 2018 rout the Fed reversed and cut three times to 1.50-1.75%. The S&P 500 gained 28.9%, its best year since 2013, and the Nasdaq-100 rose 38.0%. The 2s10s curve inverted in August, and in September overnight dollar funding seized up: SOFR printed 5.25% against a 2.15% monthly median, forcing the New York Fed into large-scale repo operations. Bitcoin nearly doubled.",
+   "perf": {
+    "spx": "+28.9%",
+    "ndx": "+38.0%"
+   },
+   "events": [
+    {
+     "date": "2019-07-31",
+     "label": "First cut of the cycle",
+     "note": "Three cuts follow in July, September and October, to 1.50-1.75%. Source: FRED DFEDTARU."
+    },
+    {
+     "date": "2019-08-14",
+     "label": "2s10s curve inverts",
+     "note": "First 2s10s inversion since 2007, a widely followed recession signal."
+    },
+    {
+     "date": "2019-09-17",
+     "label": "Repo market spike",
+     "note": "SOFR prints 5.25% versus a 2.15% median that month. Source: FRED SOFR."
+    },
+    {
+     "date": "2019-12-31",
+     "label": "Records into year-end",
+     "note": "S&P 500 +28.9% and Nasdaq-100 +38.0% for the year, both closing at records. Source: FRED SP500, NASDAQ100."
+    }
+   ]
+  },
+  {
+   "period": "2020",
+   "title": "Pandemic crash and the fastest recovery on record",
+   "summary": "The S&P 500 fell 33.9% in 33 calendar days, from 19 February to 23 March, the fastest bear market on record, with the VIX closing at 82.69. The Fed cut to zero and launched open-ended QE on 15 March; Congress passed the $2.2tn CARES Act. The index made a new record close by 18 August and finished the year up 16.3%, while the Nasdaq-100 gained 47.6%.",
+   "perf": {
+    "spx": "+16.3%",
+    "ndx": "+47.6%"
+   },
+   "events": [
+    {
+     "date": "2020-02-19",
+     "label": "Pre-COVID peak",
+     "note": "3,386.15 close, followed by a 33.9% decline to 2,237.40 on 2020-03-23. Source: FRED SP500."
+    },
+    {
+     "date": "2020-03-15",
+     "label": "Fed cuts to zero, open-ended QE",
+     "note": "100bp emergency cut to 0-0.25% plus asset purchases. Source: federalreserve.gov."
+    },
+    {
+     "date": "2020-03-27",
+     "label": "CARES Act signed",
+     "note": "$2.2 trillion of fiscal support, including direct payments and enhanced unemployment benefits."
+    },
+    {
+     "date": "2020-08-18",
+     "label": "New all-time high",
+     "note": "The S&P 500 closes above its February peak less than five months after the crash low. Source: FRED SP500."
+    }
+   ]
+  },
+  {
+   "period": "2021",
+   "title": "Liquidity, memes and the inflation turn",
+   "summary": "Indexes rose (S&P 500 +26.9%, Nasdaq-100 +26.6%) but leadership narrowed and speculative excess peaked early: the GameStop squeeze in January pushed the VIX to 37.21, and unprofitable growth de-rated from February onward while the indices kept climbing. CPI ended the year at +7.2% year over year, forcing the Fed to retire 'transitory' and begin tapering. Bitcoin peaked on 8 November at $67,510.",
+   "perf": {
+    "spx": "+26.9%",
+    "ndx": "+26.6%"
+   },
+   "events": [
+    {
+     "date": "2021-01-27",
+     "label": "GameStop squeeze",
+     "note": "Retail-driven short squeeze; VIX closes at 37.21, its 2021 high. Source: FRED VIXCLS."
+    },
+    {
+     "date": "2021-11-03",
+     "label": "Fed begins tapering",
+     "note": "Asset purchases reduced; the target range stays at 0-0.25% all year. Source: FRED DFEDTARU."
+    },
+    {
+     "date": "2021-11-08",
+     "label": "Bitcoin cycle peak",
+     "note": "$67,510 close, the high of the 2021 cycle. Source: FRED CBBTCUSD."
+    },
+    {
+     "date": "2021-12-31",
+     "label": "CPI at 7.2%",
+     "note": "December CPI +7.17% year over year on the seasonally adjusted index. Source: FRED CPIAUCSL."
+    }
+   ]
+  },
+  {
+   "period": "2022",
+   "title": "The rate-hike bear market",
+   "summary": "Seven hikes totalling 425bp took the target range from 0.25% to 4.50%, including four consecutive 75bp moves, the first of which was the largest single hike since 1994. CPI peaked at 9.1% in June. The S&P 500 fell 19.4%, its worst year since 2008, with a 25.4% peak-to-trough decline from January to October; the Nasdaq-100 fell 33.0% and Bitcoin 64.3%. FTX collapsed in November.",
+   "perf": {
+    "spx": "-19.4%",
+    "ndx": "-33.0%"
+   },
+   "events": [
+    {
+     "date": "2022-06-15",
+     "label": "First 75bp hike since 1994",
+     "note": "Headline CPI peaks at 9.1% the same month. Source: federalreserve.gov; FRED CPIAUCSL."
+    },
+    {
+     "date": "2022-01-03",
+     "label": "S&P 500 peak",
+     "note": "4,796.56 close; the index bottoms at 3,577.03 on 2022-10-12, a 25.4% decline. Source: FRED SP500."
+    },
+    {
+     "date": "2022-11-21",
+     "label": "Bitcoin cycle low",
+     "note": "$15,756 close, down 76.7% from the November 2021 peak. Source: FRED CBBTCUSD."
+    },
+    {
+     "date": "2022-12-14",
+     "label": "Final hike of the year",
+     "note": "Target range reaches 4.25-4.50% after 425bp of tightening in nine months. Source: FRED DFEDTARU."
+    }
+   ]
+  },
+  {
+   "period": "2023",
+   "title": "The AI re-rating",
+   "summary": "A regional-bank crisis in March (SVB, Signature, Credit Suisse) marked the low. From there an AI-driven rally in mega-cap technology produced a 24.2% gain for the S&P 500 and 53.8% for the Nasdaq-100, its best year since 2009. The Fed delivered a final hike in July to 5.25-5.50% and then held, while the 10-year yield approached 5% in October and the S&P 500 gave back 10.3% before a year-end melt-up.",
+   "perf": {
+    "spx": "+24.2%",
+    "ndx": "+53.8%"
+   },
+   "events": [
+    {
+     "date": "2023-03-10",
+     "label": "Silicon Valley Bank fails",
+     "note": "FDIC takes over; Signature Bank follows and Credit Suisse is absorbed by UBS the next weekend. Source: fdic.gov."
+    },
+    {
+     "date": "2023-07-26",
+     "label": "Last hike of the cycle",
+     "note": "Target range reaches 5.25-5.50%, where it stays until September 2024. Source: FRED DFEDTARU."
+    },
+    {
+     "date": "2023-10-27",
+     "label": "Autumn pullback trough",
+     "note": "S&P 500 down 10.3% from its 2023-07-31 close as the 10-year yield approaches 5%. Source: FRED SP500."
+    },
+    {
+     "date": "2023-12-31",
+     "label": "Nasdaq-100 +53.8%",
+     "note": "Fourth-best year since 1986, behind 1999, 1998 and 1991. Source: FRED NASDAQ100."
+    }
+   ]
+  },
+  {
+   "period": "2024",
+   "title": "AI capex and the start of easing",
+   "summary": "Hyperscaler AI spending drove a second consecutive year above 20% for the S&P 500 (+23.3%, with 57 record closes) and a 24.9% gain for the Nasdaq-100. A yen-carry unwind on 5 August pushed the VIX to 38.57, its highest close since 2020, and the Fed began cutting with a 50bp move on 18 September. Spot bitcoin ETPs launched in January and bitcoin rose 123%.",
+   "perf": {
+    "spx": "+23.3%",
+    "ndx": "+24.9%"
+   },
+   "events": [
+    {
+     "date": "2024-01-10",
+     "label": "Spot bitcoin ETPs approved",
+     "note": "The SEC approves rule changes allowing spot bitcoin exchange-traded products. Source: cnbc.com."
+    },
+    {
+     "date": "2024-08-05",
+     "label": "Yen carry unwind",
+     "note": "VIX closes at 38.57, its highest since March 2020; S&P 500 down 8.5% from its 2024-07-16 close. Source: FRED VIXCLS, SP500."
+    },
+    {
+     "date": "2024-09-18",
+     "label": "Fed cuts 50bp",
+     "note": "First cut of the easing cycle, to 4.75-5.00%. Source: federalreserve.gov; FRED DFEDTARU."
+    },
+    {
+     "date": "2024-12-06",
+     "label": "S&P 500 record close",
+     "note": "6,090.27, part of 57 record closes during the year. Source: FRED SP500; cnbc.com."
+    }
+   ]
+  },
+  {
+   "period": "2025",
+   "title": "Tariffs, then a melt-up",
+   "summary": "The 2 April 'Liberation Day' tariffs drove the S&P 500 down 18.9% from its February peak to the 8 April trough, with the VIX closing at 52.33. A 90-day pause on 9 April produced a 9.5% one-day gain, the third-largest since WWII, and the index rallied roughly 42% from the April intraday low to year-end, finishing +16.4% for a third straight double-digit year. The Fed cut three times to 3.50-3.75%, a 43-day shutdown ran from October to November, and gold passed $4,000. Bitcoin fell 7.1%.",
+   "perf": {
+    "spx": "+16.4%",
+    "ndx": "+20.2%"
+   },
+   "events": [
+    {
+     "date": "2025-04-02",
+     "label": "'Liberation Day' tariffs",
+     "note": "10% baseline tariff plus country-specific reciprocal rates; S&P 500 falls 14.7% to the 2025-04-07 intraday low of 4,835.04. Source: briefing.com."
+    },
+    {
+     "date": "2025-04-09",
+     "label": "90-day pause, +9.5% day",
+     "note": "Third-largest single-day S&P 500 gain since WWII; Nasdaq Composite +12.2%, its second-best day ever. Source: briefing.com."
+    },
+    {
+     "date": "2025-10-08",
+     "label": "Gold breaks $4,000/oz",
+     "note": "First time above $4,000; record close of $4,356.30 follows on 2025-10-20. Source: reuters.com."
+    },
+    {
+     "date": "2025-10-05",
+     "label": "Bitcoin record close",
+     "note": "$124,720; a $19bn leveraged liquidation cascade follows on 2025-10-10. Source: FRED CBBTCUSD; coindesk.com."
+    }
+   ]
+  },
+  {
+   "period": "2026",
+   "title": "Oil shock, a new Fed chair, and the AI unwind",
+   "summary": "A US-Israel war with Iran from 28 February and the near-blockade of the Strait of Hormuz drove oil up more than 60% in March and the S&P 500 down 9.1% from its January high. The index recovered to a record 7,818.93 on 6 October. The Fed, under new chair Kevin Warsh, hiked in September as CPI returned to 3.7%. A Democratic midterm sweep on 3 November preceded a 4.36% AI-led selloff on 5 November. Year to date the S&P 500 is +10.5%, the Nasdaq-100 +10.7%, bitcoin -28.3%.",
+   "perf": {
+    "spx": "+10.5%",
+    "ndx": "+10.7%"
+   },
+   "events": [
+    {
+     "date": "2026-02-28",
+     "label": "US-Israel war with Iran begins",
+     "note": "Strike campaign opens; by late March a near-total blockade of the Strait of Hormuz has removed about a fifth of seaborne crude. Source: en.wikipedia.org/wiki/2026_Iran_war; nbcnews.com."
+    },
+    {
+     "date": "2026-03-30",
+     "label": "Equity trough",
+     "note": "S&P 500 closes at 6,344, down 9.1% from its 2026-01-27 peak; Nasdaq-100 -11.8%. VIX peaks at 31.05 on 2026-03-27. Source: FRED SP500, NASDAQ100, VIXCLS."
+    },
+    {
+     "date": "2026-09-17",
+     "label": "Fed hikes to 3.75-4.00%",
+     "note": "First hike since 2023, under chair Kevin Warsh, as CPI reaches 3.7% year over year. Source: FRED DFEDTARU, CPIAUCSL."
+    },
+    {
+     "date": "2026-11-05",
+     "label": "AI-led rout after midterms",
+     "note": "S&P 500 -4.36% to 7,353.73, its worst day since 2025-04-04; Nasdaq Composite -5.5%; Magnificent 7 lose about $1tn in market value. Source: cnbc.com; morningstar.com."
+    }
+   ]
+  }
+ ],
+ "stats": [
+  {
+   "label": "S&P 500 10-year price return",
+   "value": "+13.3%/yr",
+   "asOf": "2026-11-13",
+   "detail": "2,164.20 on 2016-11-14 to 7,561.67 on 2026-11-13: +249% cumulative over 10.0 years. Price return, no dividends.",
+   "source": "https://fred.stlouisfed.org/series/SP500"
+  },
+  {
+   "label": "Nasdaq-100 10-year price return",
+   "value": "+19.5%/yr",
+   "asOf": "2026-11-13",
+   "detail": "+494% cumulative over the same window. Price return, no dividends.",
+   "source": "https://fred.stlouisfed.org/series/NASDAQ100"
+  },
+  {
+   "label": "Worst calendar year of the decade",
+   "value": "-19.4%",
+   "asOf": "2022-12-30",
+   "detail": "S&P 500 price return in 2022, its worst year since 2008. The Nasdaq-100 fell 33.0% the same year.",
+   "source": "https://historyofmarket.com/sp500/annual"
+  },
+  {
+   "label": "Deepest S&P 500 drawdown of the decade",
+   "value": "-33.9%",
+   "asOf": "2020-03-23",
+   "detail": "Peak close 3,386.15 on 2020-02-19 to 2,237.40 on 2020-03-23: 33 calendar days, the fastest bear market on record.",
+   "source": "https://fred.stlouisfed.org/series/SP500"
+  },
+  {
+   "label": "Highest VIX close",
+   "value": "82.69",
+   "asOf": "2020-03-16",
+   "detail": "The CBOE volatility index's all-time closing high.",
+   "source": "https://fred.stlouisfed.org/series/VIXCLS"
+  },
+  {
+   "label": "Fed funds target range, upper bound",
+   "value": "4.00%",
+   "asOf": "2026-11-15",
+   "detail": "0.25% after the March 2020 emergency cuts, 5.50% at the 2023 peak, 3.75% after three 2025 cuts, 4.00% after the September 2026 hike.",
+   "source": "https://fred.stlouisfed.org/series/DFEDTARU"
+  },
+  {
+   "label": "Bitcoin drawdown, 2017-2018 cycle",
+   "value": "-83.8%",
+   "asOf": "2018-12-15",
+   "detail": "$19,650 close on 2017-12-16 to $3,183 on 2018-12-15. Coinbase BTC-USD daily closes.",
+   "source": "https://fred.stlouisfed.org/series/CBBTCUSD"
+  },
+  {
+   "label": "Bitcoin drawdown, 2021-2022 cycle",
+   "value": "-76.7%",
+   "asOf": "2022-11-21",
+   "detail": "$67,510 close on 2021-11-08 to $15,756 on 2022-11-21.",
+   "source": "https://fred.stlouisfed.org/series/CBBTCUSD"
+  },
+  {
+   "label": "Bitcoin drawdown from the October 2025 record",
+   "value": "-49.6%",
+   "asOf": "2026-11-14",
+   "detail": "$124,720 close on 2025-10-05 to $62,891 on 2026-11-14; the low close was $58,586 on 2026-06-30 (-53.0%).",
+   "source": "https://fred.stlouisfed.org/series/CBBTCUSD"
+  },
+  {
+   "label": "Share of up days, S&P 500",
+   "value": "54.8%",
+   "asOf": "2026-11-13",
+   "detail": "2,513 daily returns from 2016-11-14 to 2026-11-13; mean +0.0564%, standard deviation 1.143%, a signal-to-noise ratio of 0.049.",
+   "source": "https://fred.stlouisfed.org/series/SP500"
+  },
+  {
+   "label": "Variance of tomorrow's return explained by today's",
+   "value": "2.16%",
+   "asOf": "2026-11-13",
+   "detail": "AR(1) R-squared for S&P 500 daily returns, coefficient -0.147. Nasdaq-100 1986-2026: 0.26%.",
+   "source": "https://fred.stlouisfed.org/series/SP500"
+  }
+ ],
+ "evidence": [
+  {
+   "topic": "Time-series momentum",
+   "finding": "An instrument's own past 12-month return positively predicts its next-month return across 58 futures and forward contracts, for every contract examined, persisting about a year before partially reversing.",
+   "strength": "moderate",
+   "source": "https://www.aqr.com/Insights/Research/Journal-Article/Time-Series-Momentum"
+  },
+  {
+   "topic": "Trend following over a century",
+   "finding": "Time-series momentum delivered positive average returns in every decade from 1880 to 2016 and performed well in 8 of the 10 largest 60/40 drawdowns, across recessions, wars and inflation regimes.",
+   "strength": "moderate",
+   "source": "https://www.aqr.com/Insights/Research/Journal-Article/A-Century-of-Evidence-on-Trend-Following-Investing"
+  },
+  {
+   "topic": "Time-series momentum is contested",
+   "finding": "Asset-by-asset regressions show little evidence of time-series momentum in or out of sample; the pooled t-statistic fails parametric and nonparametric bootstraps, and the strategy's performance is roughly the same as one based on the historical sample mean.",
+   "strength": "moderate",
+   "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3165284"
+  },
+  {
+   "topic": "Moving-average crossovers",
+   "finding": "Ten moving-average and six trading-range rules on the DJIA 1897-1986 showed predictive power, but the authors flag data snooping and ignore transaction costs.",
+   "strength": "weak",
+   "source": "https://doi.org/10.1111/j.1540-6261.1992.tb04681.x"
+  },
+  {
+   "topic": "Data snooping in technical rules",
+   "finding": "After controlling for the thousands of rule specifications tested, the best technical rule's out-of-sample performance is not statistically significant.",
+   "strength": "strong",
+   "source": "https://doi.org/10.1111/0022-1082.00163"
+  },
+  {
+   "topic": "Costs erase technical-rule profits",
+   "finding": "False-discovery-rate and persistence tests on DJIA data 1897-2011 show an investor could never have selected the future best rules ex ante, and even in-sample performance is fully offset by low transaction costs.",
+   "strength": "strong",
+   "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1095202"
+  },
+  {
+   "topic": "MACD and RSI in five OECD markets",
+   "finding": "MACD(12,26,0) and RSI(21,50) generated significant abnormal returns in Milan and Toronto and RSI(14,30/70) in the Dow, but results did not hold across all five markets and transaction costs were not modelled.",
+   "strength": "weak",
+   "source": "https://www.mdpi.com/1911-8074/7/1/1"
+  },
+  {
+   "topic": "Technical patterns carry incremental information",
+   "finding": "Kernel-regression pattern detection on US stocks 1962-1996 finds moving averages and oscillators provide statistically detectable incremental information, though not necessarily economic profit.",
+   "strength": "weak",
+   "source": "https://doi.org/10.1111/0022-1082.00265"
+  },
+  {
+   "topic": "Short-horizon reversal is liquidity provision",
+   "finding": "Returns to short-term reversal strategies proxy for compensation for supplying liquidity; they are highly predictable with the VIX and spike in crises, which makes them a market-making business rather than a retail signal.",
+   "strength": "moderate",
+   "source": "https://www.nber.org/papers/w17653"
+  },
+  {
+   "topic": "Volatility-managed portfolios",
+   "finding": "Scaling exposure inversely to volatility raises Sharpe ratios and alphas for equity and credit factors and reduces the severity of left-tail events across asset classes.",
+   "strength": "moderate",
+   "source": "https://www.nber.org/papers/w22208"
+  },
+  {
+   "topic": "Volatility targeting out of sample",
+   "finding": "Across 103 equity strategies, volatility-managed portfolios do not systematically outperform unmanaged ones, and implementable out-of-sample versions earn lower Sharpe ratios because the spanning regressions are structurally unstable.",
+   "strength": "moderate",
+   "source": "https://doi.org/10.1016/j.jfineco.2020.04.015"
+  },
+  {
+   "topic": "Stop-loss rules",
+   "finding": "Under a random walk, simple stop-loss rules always reduce expected return; with momentum they can add value. Applied to US equities 1950-2004, some rules added 50-100bp per month during stop-out periods.",
+   "strength": "moderate",
+   "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=968338"
+  },
+  {
+   "topic": "Triple-barrier labelling",
+   "finding": "Labelling by which of a profit target, stop-loss or time limit is hit first aligns the label with the trading rule and enables meta-labelling and purged cross-validation, but no published study shows it creates predictive power.",
+   "strength": "moderate",
+   "source": "https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482086"
+  },
+  {
+   "topic": "Backtest overfitting",
+   "finding": "A Sharpe ratio selected as the best of many trials must be deflated for the number of trials, non-normality and sample length; the expected maximum of many draws inflates in-sample performance substantially.",
+   "strength": "strong",
+   "source": "https://doi.org/10.3905/jpm.2014.40.5.094"
+  },
+  {
+   "topic": "Trading costs and turnover",
+   "finding": "After realistic trading costs a large share of published anomalies lose statistical and economic significance; the survivors tend to be low-turnover. Trading 100 round trips a year at 5bp per side costs about 10% annually.",
+   "strength": "strong",
+   "source": "https://doi.org/10.1093/rfs/hhv063"
+  },
+  {
+   "topic": "Retail trading performance",
+   "finding": "Of 66,465 US discount-broker households (1991-1996), the most active quintile earned 11.4% a year while the market returned 17.9%.",
+   "strength": "strong",
+   "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=219228"
+  },
+  {
+   "topic": "Day trading outcomes",
+   "finding": "Of individuals who day-traded Brazilian equity futures for at least 300 days, 97% lost money, only 0.4% earned more than a bank teller's wage, and there was no evidence of learning.",
+   "strength": "strong",
+   "source": "https://doi.org/10.2139/ssrn.3423101"
+  },
+  {
+   "topic": "Post-publication decay",
+   "finding": "Across 97 published return predictors, returns are 26% lower out-of-sample and 58% lower after publication.",
+   "strength": "strong",
+   "source": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2156623"
+  },
+  {
+   "topic": "Out-of-sample predictability of returns",
+   "finding": "The standard predictors of the equity premium failed both in-sample and out-of-sample over the prior 30 years, and would not have helped a real-time investor time the market.",
+   "strength": "strong",
+   "source": "https://doi.org/10.1093/rfs/hhm014"
+  },
+  {
+   "topic": "Risk of ruin and position sizing",
+   "finding": "With a positive edge, the growth-optimal fraction is edge/odds; betting materially above it produces ruin with probability one in the long run even though every bet has positive expectancy.",
+   "strength": "strong",
+   "source": "https://www.eecs.harvard.edu/cs286r/courses/fall12/papers/Thorpe_KellyCriterion2007.pdf"
+  }
+ ],
+ "disclaimers": [
+  "All index figures are price returns and exclude dividends; total returns would be roughly 1.5-2.0 percentage points per year higher for the S&P 500.",
+  "Drawdowns are measured close-to-close and understate intraday losses, which were deeper in every episode listed.",
+  "2026 figures are year-to-date through 2026-11-13 and must not be annualised.",
+  "Bitcoin figures use Coinbase BTC-USD daily closes and differ by a few tenths of a percent from other venues; intraday records differ more.",
+  "Nothing here is investment advice. The indicators this app draws have weak or contested predictive power in the published literature.",
+  "No cited study tests the exact parameter sets, markets and horizons used by this app; the replication in EVIDENCE.md is a single-market sanity check, not peer-reviewed research.",
+  "Past performance, including the decade summarised here, is not indicative of future results."
+ ]
+}

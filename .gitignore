@@ -1,0 +1,11 @@
+# build inputs (re-fetch with: node tools/fetch-data.mjs)
+data/raw/
+data/tmp/
+data/*.log
+data/fetch-report.json
+
+# os / editor
+.DS_Store
+*.swp
+node_modules/
+.env
