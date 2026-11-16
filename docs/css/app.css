@@ -290,6 +290,8 @@ table.tight { table-layout: fixed; }
 table.tight th, table.tight td { overflow: hidden; text-overflow: ellipsis; }
 table.tight td .nm { max-width: 100%; }
 table.tight th:first-child, table.tight td:first-child { padding-left: 16px; }
+table.tight th, table.tight td { padding-left: 6px; padding-right: 6px; }
+table.tight td:last-child { font-size: 12px; letter-spacing: -.02em; }
 
 /* -------------------------------- verdict -------------------------------- */
 

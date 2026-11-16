@@ -248,8 +248,8 @@ async function viewDashboard() {
         </div>
         <div class="table-wrap">
           <table class="tight">
-            <colgroup><col style="width:36%"><col style="width:16%"><col style="width:15%"><col style="width:14%"><col style="width:19%"></colgroup>
-            <thead><tr><th class="no-sort">Instrument</th><th class="no-sort">Bias</th><th class="no-sort">P(target)</th><th class="no-sort">Edge</th><th class="no-sort">Stop → target</th></tr></thead>
+            <colgroup><col style="width:27%"><col style="width:13%"><col style="width:13%"><col style="width:12%"><col style="width:35%"></colgroup>
+            <thead><tr><th class="no-sort">Instrument</th><th class="no-sort">Bias</th><th class="no-sort">P(TP)</th><th class="no-sort">Edge</th><th class="no-sort">Stop → target</th></tr></thead>
             <tbody>
               ${top.length ? top.map((s) => `
                 <tr data-sym="${esc(s.symbol)}">
